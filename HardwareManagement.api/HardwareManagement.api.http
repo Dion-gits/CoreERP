@@ -1,0 +1,148 @@
+@HardwareManagement.api_HostAddress = http://localhost:5218
+
+GET {{HardwareManagement.api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
+
+# 1. Master ERP: Create Company
+POST {{HardwareManagement.api_HostAddress}}/companies
+Content-Type: application/json
+
+{
+  "companyCode": "COMP001",
+  "companyName": "Builders’ Hub",
+  "isActive": true,
+  "createdAt": "2026-09-03T09:15:00"
+}
+
+###
+
+# 2. Master ERP: Create Device
+POST {{HardwareManagement.api_HostAddress}}/devices
+Content-Type: application/json
+
+{
+  "companyId": 1,
+  "deviceCode": "DEV001",
+  "deviceName": "Main PC",
+  "isActive": true,
+  "createdAt": "2026-09-03T09:50:00"
+}
+
+###
+
+# 3. Master ERP: Map Company Database
+POST {{HardwareManagement.api_HostAddress}}/company-databases
+Content-Type: application/json
+
+{
+  "companyId": 1,
+  "serverName": "db66559.public.databaseasp.net",
+  "databaseName": "db66559",
+  "isActive": true
+}
+
+
+###
+GET {{HardwareManagement.api_HostAddress}}/test-tenant/1
+Accept: application/json
+
+###
+POST {{HardwareManagement.api_HostAddress}}/tenant/1/products
+Content-Type: application/json
+
+{
+  "productCode": "PROD001",
+  "productName": "Demo Product",
+  "unitPrice": 99.50,
+  "isActive": true
+}
+
+###
+GET {{HardwareManagement.api_HostAddress}}/tenant/1/products
+Accept: application/json
+
+
+### Test Database Connection Resolution for Tenant A (Company 1)
+GET {{HardwareManagement.api_HostAddress}}/test-tenant/1
+Accept: application/json
+
+### Test Database Connection Resolution for Tenant B (Company 2)
+GET {{HardwareManagement.api_HostAddress}}/test-tenant/2
+Accept: application/json
+
+### Test Database Connection Resolution for Tenant C (Company 3)
+GET {{HardwareManagement.api_HostAddress}}/test-tenant/3
+Accept: application/json
+
+### Add Customer to Tenant A (Company 1)
+POST {{HardwareManagement.api_HostAddress}}/tenant/1/customers
+Content-Type: application/json
+
+{
+  "customerCode": "CUST001",
+  "customerName": "Juan Dela Cruz",
+  "contactNumber": "09171234567",
+  "emailAddress": "juan@example.com",
+  "address": "Davao City",
+  "isActive": true
+}
+
+### Add Customer to Tenant B (Company 2)
+POST {{HardwareManagement.api_HostAddress}}/tenant/2/customers
+Content-Type: application/json
+
+{
+  "customerCode": "CUST001",
+  "customerName": "Maria Santos",
+  "contactNumber": "09181234567",
+  "emailAddress": "maria@example.com",
+  "address": "Cebu City",
+  "isActive": true
+}
+
+### Get Customers for Tenant A (Company 1)
+GET {{HardwareManagement.api_HostAddress}}/tenant/1/customers
+Accept: application/json
+
+### Get Customers for Tenant B (Company 2)
+GET {{HardwareManagement.api_HostAddress}}/tenant/2/customers
+Accept: application/json
+
+
+### 1. Stock In / Adjust Stock on Tenant A (Company 1)
+POST {{HardwareManagement.api_HostAddress}}/tenant/1/inventory/adjust?productId=1&quantity=50.00&reorderLevel=10.00
+Accept: application/json
+
+### 2. View Inventory Status on Tenant A
+GET {{HardwareManagement.api_HostAddress}}/tenant/1/inventory
+Accept: application/json
+
+### 3. Process Sale for Tenant A (Deducts 5 units)
+POST {{HardwareManagement.api_HostAddress}}/tenant/1/sales
+Content-Type: application/json
+
+{
+  "invoiceNumber": "INV-2026-001",
+  "customerId": 1,
+  "saleItems": [
+    {
+      "productId": 1,
+      "quantity": 5.00,
+      "unitPrice": 150.00
+    }
+  ]
+}
+
+### 4. Verify Auto Stock Reduction on Tenant A (Remaining stock should be 45.00)
+GET {{HardwareManagement.api_HostAddress}}/tenant/1/inventory
+Accept: application/json
+
+### 5. Fetch Analytics Report for Tenant A
+GET {{HardwareManagement.api_HostAddress}}/tenant/1/reports/sales-summary
+Accept: application/json
+
+### 6. Fetch Analytics Report for Tenant B (Proves Tenant 2 remains untouched)
+GET {{HardwareManagement.api_HostAddress}}/tenant/2/reports/sales-summary
+Accept: application/json
