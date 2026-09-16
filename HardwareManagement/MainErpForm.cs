@@ -17,6 +17,15 @@ namespace Hardware.winforms
         private List<CartItemDto> _cart = new List<CartItemDto>();
         private SalesSummaryReportDto _currentReport;
 
+        // Modern Theme Palette
+        private readonly Color BgDark = Color.FromArgb(18, 18, 18);
+        private readonly Color CardBg = Color.FromArgb(28, 28, 28);
+        private readonly Color BorderColor = Color.FromArgb(45, 45, 45);
+        private readonly Color AccentGreen = Color.FromArgb(16, 185, 129);
+        private readonly Color AccentBlue = Color.FromArgb(59, 130, 246);
+        private readonly Color TextPrimary = Color.FromArgb(243, 244, 246);
+        private readonly Color TextMuted = Color.FromArgb(156, 163, 175);
+
         // Layout Containers
         private Panel pnlSidebar;
         private Panel pnlMainContent;
@@ -56,35 +65,36 @@ namespace Hardware.winforms
 
         private void InitializeComponentCustom()
         {
-            this.Text = "Micro-Enterprise ERP - Hardware System";
-            this.Size = new Size(1280, 800);
+            this.Text = "Micro-Enterprise ERP - Modern Core";
+            this.Size = new Size(1320, 820);
             this.MinimumSize = new Size(1200, 750);
             this.StartPosition = FormStartPosition.CenterScreen;
-            this.BackColor = Color.FromArgb(24, 24, 24);
+            this.BackColor = BgDark;
+            this.DoubleBuffered = true;
 
             // ==========================================
-            // 1. SIDEBAR PANEL 
+            // 1. MINIMALIST SIDEBAR 
             // ==========================================
             pnlSidebar = new Panel
             {
                 Dock = DockStyle.Left,
-                Width = 220,
-                BackColor = Color.FromArgb(32, 32, 32)
+                Width = 240,
+                BackColor = CardBg
             };
 
             Label lblAppTitle = new Label
             {
-                Text = "⚡ HARDWARE ERP",
-                ForeColor = Color.White,
-                Font = new Font("Segoe UI", 12, FontStyle.Bold),
-                Location = new Point(15, 20),
+                Text = "⚡ CORE ERP",
+                ForeColor = TextPrimary,
+                Font = new Font("Segoe UI", 13, FontStyle.Bold),
+                Location = new Point(20, 24),
                 AutoSize = true
             };
             pnlSidebar.Controls.Add(lblAppTitle);
 
-            btnNavSales = CreateSidebarButton("🛒  Sales & POS", 80);
-            btnNavInventory = CreateSidebarButton("📦  Inventory", 130);
-            btnNavReports = CreateSidebarButton("📊  Transaction History", 180);
+            btnNavSales = CreateSidebarButton("🛒  Point of Sale", 85);
+            btnNavInventory = CreateSidebarButton("📦  Inventory Hub", 140);
+            btnNavReports = CreateSidebarButton("📊  Transaction History", 195);
 
             btnNavSales.Click += (s, e) => SwitchView(viewSales, btnNavSales);
             btnNavInventory.Click += (s, e) => SwitchView(viewInventory, btnNavInventory);
@@ -92,15 +102,15 @@ namespace Hardware.winforms
 
             btnLogout = new Button
             {
-                Text = "🚪  Log Out",
+                Text = "🚪  Sign Out",
                 Dock = DockStyle.Bottom,
-                Height = 45,
+                Height = 50,
                 FlatStyle = FlatStyle.Flat,
                 ForeColor = Color.FromArgb(239, 68, 68),
-                BackColor = Color.FromArgb(32, 32, 32),
-                Font = new Font("Segoe UI", 10.5f, FontStyle.Regular),
+                BackColor = CardBg,
+                Font = new Font("Segoe UI", 10, FontStyle.Regular),
                 TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(15, 0, 0, 0),
+                Padding = new Padding(20, 0, 0, 0),
                 Cursor = Cursors.Hand,
                 FlatAppearance = { BorderSize = 0 }
             };
@@ -114,22 +124,19 @@ namespace Hardware.winforms
                     this.Show();
                     _ = RefreshAllDataAsync();
                 }
-                else
-                {
-                    Application.Exit();
-                }
+                else { Application.Exit(); }
             };
 
             pnlSidebar.Controls.Add(btnLogout);
             pnlSidebar.Controls.AddRange(new Control[] { btnNavSales, btnNavInventory, btnNavReports });
 
             // ==========================================
-            // 2. MAIN CONTENT CONTAINER 
+            // 2. MAIN CONTENT AREA 
             // ==========================================
             pnlMainContent = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = Color.FromArgb(24, 24, 24)
+                BackColor = BgDark
             };
 
             BuildSalesView();
@@ -148,12 +155,12 @@ namespace Hardware.winforms
             return new Button
             {
                 Text = text,
-                Location = new Point(10, top),
-                Size = new Size(200, 45),
+                Location = new Point(12, top),
+                Size = new Size(216, 45),
                 FlatStyle = FlatStyle.Flat,
-                ForeColor = Color.LightGray,
-                BackColor = Color.FromArgb(32, 32, 32),
-                Font = new Font("Segoe UI", 10.5f, FontStyle.Regular),
+                ForeColor = TextMuted,
+                BackColor = CardBg,
+                Font = new Font("Segoe UI", 10, FontStyle.Regular),
                 TextAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(15, 0, 0, 0),
                 Cursor = Cursors.Hand,
@@ -171,108 +178,139 @@ namespace Hardware.winforms
             {
                 if (c is Button btn && btn != btnLogout)
                 {
-                    btn.BackColor = Color.FromArgb(32, 32, 32);
-                    btn.ForeColor = Color.LightGray;
+                    btn.BackColor = CardBg;
+                    btn.ForeColor = TextMuted;
                 }
             }
 
-            activeBtn.BackColor = Color.FromArgb(50, 50, 50);
-            activeBtn.ForeColor = Color.White;
+            activeBtn.BackColor = Color.FromArgb(40, 40, 40);
+            activeBtn.ForeColor = TextPrimary;
         }
 
         // ==========================================
-        // MODULE 1: SALES & POS
+        // MODULE 1: MODERN POS / SALES VIEW
         // ==========================================
         private void BuildSalesView()
         {
-            viewSales = new Panel();
+            viewSales = new Panel { Padding = new Padding(24) };
 
-            Panel pnlCart = new Panel { Dock = DockStyle.Left, Width = 680, Padding = new Padding(20) };
-            Label lblCartTitle = new Label { Text = "Current Sale Items", ForeColor = Color.White, Font = new Font("Segoe UI", 14, FontStyle.Bold), AutoSize = true, Location = new Point(20, 20) };
+            Panel pnlCartCard = new Panel
+            {
+                Location = new Point(24, 24),
+                Size = new Size(680, 710),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left,
+                BackColor = CardBg
+            };
+
+            Label lblCartTitle = new Label { Text = "Active Cart Items", ForeColor = TextPrimary, Font = new Font("Segoe UI", 12, FontStyle.Bold), AutoSize = true, Location = new Point(20, 20) };
 
             dgvCart = new DataGridView
             {
-                Location = new Point(20, 60),
-                Size = new Size(640, 550),
+                Location = new Point(20, 65),
+                Size = new Size(640, 620),
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-                BackgroundColor = Color.FromArgb(30, 30, 30),
-                ForeColor = Color.Black,
-                RowTemplate = { Height = 35 }
+                BackgroundColor = CardBg,
+                ForeColor = TextPrimary,
+                GridColor = BorderColor,
+                BorderStyle = BorderStyle.None,
+                RowTemplate = { Height = 38 },
+                EnableHeadersVisualStyles = false
             };
-            pnlCart.Controls.AddRange(new Control[] { lblCartTitle, dgvCart });
+            dgvCart.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 35, 35);
+            dgvCart.ColumnHeadersDefaultCellStyle.ForeColor = TextPrimary;
+            dgvCart.DefaultCellStyle.BackColor = CardBg;
+            dgvCart.DefaultCellStyle.ForeColor = TextPrimary;
+            dgvCart.DefaultCellStyle.SelectionBackColor = Color.FromArgb(50, 50, 50);
 
-            Panel pnlCheckout = new Panel { Dock = DockStyle.Fill, Padding = new Padding(20) };
+            pnlCartCard.Controls.AddRange(new Control[] { lblCartTitle, dgvCart });
 
-            GroupBox grpAdd = new GroupBox { Text = "Add Item via ID", ForeColor = Color.White, Font = new Font("Segoe UI", 11), Location = new Point(20, 20), Size = new Size(320, 280) };
+            Panel pnlCheckoutCard = new Panel
+            {
+                Location = new Point(728, 24),
+                Size = new Size(350, 710),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                BackColor = CardBg
+            };
 
-            grpAdd.Controls.Add(new Label { Text = "Product ID:", ForeColor = Color.White, Location = new Point(15, 42), AutoSize = true });
-            txtSaleProductId = new TextBox { Location = new Point(125, 39), Width = 170 };
+            GroupBox grpAdd = new GroupBox { Text = "Add Item via ID", ForeColor = TextMuted, Font = new Font("Segoe UI", 10), Location = new Point(20, 20), Size = new Size(310, 260) };
+
+            grpAdd.Controls.Add(new Label { Text = "Product ID:", ForeColor = TextPrimary, Location = new Point(15, 38), AutoSize = true });
+            txtSaleProductId = new TextBox { Location = new Point(115, 35), Width = 175, BackColor = BgDark, ForeColor = TextPrimary };
             grpAdd.Controls.Add(txtSaleProductId);
 
-            grpAdd.Controls.Add(new Label { Text = "Quantity:", ForeColor = Color.White, Location = new Point(15, 85), AutoSize = true });
-            txtSaleQty = new TextBox { Location = new Point(125, 82), Width = 170, Text = "1" };
+            grpAdd.Controls.Add(new Label { Text = "Quantity:", ForeColor = TextPrimary, Location = new Point(15, 82), AutoSize = true });
+            txtSaleQty = new TextBox { Location = new Point(115, 79), Width = 175, Text = "1", BackColor = BgDark, ForeColor = TextPrimary };
             grpAdd.Controls.Add(txtSaleQty);
 
-            grpAdd.Controls.Add(new Label { Text = "Unit Price:", ForeColor = Color.White, Location = new Point(15, 128), AutoSize = true });
-            txtUnitPrice = new TextBox { Location = new Point(125, 125), Width = 170 };
+            grpAdd.Controls.Add(new Label { Text = "Unit Price:", ForeColor = TextPrimary, Location = new Point(15, 126), AutoSize = true });
+            txtUnitPrice = new TextBox { Location = new Point(115, 123), Width = 175, BackColor = BgDark, ForeColor = TextPrimary };
             grpAdd.Controls.Add(txtUnitPrice);
 
-            Button btnAddCart = new Button { Text = "Add to Cart", Location = new Point(15, 175), Width = 280, Height = 45, BackColor = Color.FromArgb(0, 120, 215), ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
+            Button btnAddCart = new Button { Text = "Add to Cart", Location = new Point(15, 180), Width = 275, Height = 42, BackColor = AccentBlue, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            btnAddCart.FlatAppearance.BorderSize = 0;
             btnAddCart.Click += (s, e) => AddToCart();
             grpAdd.Controls.Add(btnAddCart);
 
-            GroupBox grpMeta = new GroupBox { Text = "Transaction Details", ForeColor = Color.White, Font = new Font("Segoe UI", 11), Location = new Point(20, 320), Size = new Size(320, 150) };
+            GroupBox grpMeta = new GroupBox { Text = "Transaction Details", ForeColor = TextMuted, Font = new Font("Segoe UI", 10), Location = new Point(20, 295), Size = new Size(310, 150) };
 
-            grpMeta.Controls.Add(new Label { Text = "Invoice #:", ForeColor = Color.White, Location = new Point(15, 42), AutoSize = true });
-            txtInvoiceNum = new TextBox { Location = new Point(125, 39), Width = 170, Text = "INV-" + DateTime.Now.ToString("fff") };
+            grpMeta.Controls.Add(new Label { Text = "Invoice #:", ForeColor = TextPrimary, Location = new Point(15, 42), AutoSize = true });
+            txtInvoiceNum = new TextBox { Location = new Point(115, 39), Width = 175, Text = "INV-" + DateTime.Now.ToString("fff"), BackColor = BgDark, ForeColor = TextPrimary };
             grpMeta.Controls.Add(txtInvoiceNum);
 
-            grpMeta.Controls.Add(new Label { Text = "Cust ID:", ForeColor = Color.White, Location = new Point(15, 85), AutoSize = true });
-            txtCustomerId = new TextBox { Location = new Point(125, 82), Width = 170, Text = "1" };
+            grpMeta.Controls.Add(new Label { Text = "Cust ID:", ForeColor = TextPrimary, Location = new Point(15, 86), AutoSize = true });
+            txtCustomerId = new TextBox { Location = new Point(115, 83), Width = 175, Text = "1", BackColor = BgDark, ForeColor = TextPrimary };
             grpMeta.Controls.Add(txtCustomerId);
 
-            lblTotalAmount = new Label { Text = "Total: $0.00", ForeColor = Color.LightGreen, Location = new Point(20, 490), Font = new Font("Segoe UI", 20, FontStyle.Bold), AutoSize = true };
+            lblTotalAmount = new Label { Text = "Total: $0.00", ForeColor = AccentGreen, Location = new Point(25, 470), Font = new Font("Segoe UI", 18, FontStyle.Bold), AutoSize = true };
 
-            Button btnCheckout = new Button { Text = "Process Checkout", Location = new Point(20, 545), Width = 320, Height = 60, BackColor = Color.SeaGreen, ForeColor = Color.White, Font = new Font("Segoe UI", 12, FontStyle.Bold), FlatStyle = FlatStyle.Flat };
+            Button btnCheckout = new Button { Text = "Process Checkout", Location = new Point(20, 530), Width = 310, Height = 55, BackColor = AccentGreen, ForeColor = Color.White, Font = new Font("Segoe UI", 11, FontStyle.Bold), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            btnCheckout.FlatAppearance.BorderSize = 0;
             btnCheckout.Click += async (s, e) => await CompleteSaleAsync();
 
-            pnlCheckout.Controls.AddRange(new Control[] { grpAdd, grpMeta, lblTotalAmount, btnCheckout });
+            pnlCheckoutCard.Controls.AddRange(new Control[] { grpAdd, grpMeta, lblTotalAmount, btnCheckout });
 
-            viewSales.Controls.Add(pnlCheckout);
-            viewSales.Controls.Add(pnlCart);
+            viewSales.Controls.AddRange(new Control[] { pnlCartCard, pnlCheckoutCard });
         }
 
         // ==========================================
-        // MODULE 2: INVENTORY
+        // MODULE 2: INVENTORY HUB VIEW
         // ==========================================
         private void BuildInventoryView()
         {
-            viewInventory = new Panel { Size = new Size(1060, 800), Padding = new Padding(20) };
+            viewInventory = new Panel { Padding = new Padding(24) };
 
-            Label lblTitle = new Label { Text = "Inventory & Product Management", ForeColor = Color.White, Font = new Font("Segoe UI", 14, FontStyle.Bold), AutoSize = true, Location = new Point(20, 20) };
+            Label lblTitle = new Label { Text = "Inventory & Stock Hub", ForeColor = TextPrimary, Font = new Font("Segoe UI", 14, FontStyle.Bold), AutoSize = true, Location = new Point(24, 24) };
 
             dgvInventory = new DataGridView
             {
-                Location = new Point(20, 60),
-                Size = new Size(1020, 310),
+                Location = new Point(24, 70),
+                Size = new Size(1034, 320),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 ReadOnly = true,
-                BackgroundColor = Color.FromArgb(30, 30, 30),
-                ForeColor = Color.Black,
+                BackgroundColor = CardBg,
+                ForeColor = TextPrimary,
+                GridColor = BorderColor,
+                BorderStyle = BorderStyle.None,
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect,
-                AutoGenerateColumns = false
+                AutoGenerateColumns = false,
+                EnableHeadersVisualStyles = false
             };
+            dgvInventory.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 35, 35);
+            dgvInventory.ColumnHeadersDefaultCellStyle.ForeColor = TextPrimary;
+            dgvInventory.DefaultCellStyle.BackColor = CardBg;
+            dgvInventory.DefaultCellStyle.ForeColor = TextPrimary;
+            dgvInventory.DefaultCellStyle.SelectionBackColor = Color.FromArgb(50, 50, 50);
 
             dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "InventoryId", HeaderText = "Inv ID", Width = 70 });
             dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ProductId", HeaderText = "Prod ID", Width = 70 });
-            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ProductName", HeaderText = "Product Name", Width = 200 });
-            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ProductCode", HeaderText = "Product Code", Width = 130 });
-            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "UnitPrice", HeaderText = "Unit Price", Width = 100, DefaultCellStyle = { Format = "C2" } });
+            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ProductName", HeaderText = "Product Name", Width = 220 });
+            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ProductCode", HeaderText = "Code", Width = 130 });
+            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "UnitPrice", HeaderText = "Unit Price", Width = 110, DefaultCellStyle = { Format = "C2" } });
             dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "QuantityOnHand", HeaderText = "Stock Qty", Width = 100 });
-            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ReorderLevel", HeaderText = "Reorder Lvl", Width = 100 });
-            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "IsLowStock", HeaderText = "Low Stock?", Width = 90 });
-            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastUpdatedAt", HeaderText = "Last Updated", Width = 140 });
+            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ReorderLevel", HeaderText = "Reorder", Width = 100 });
+            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "IsLowStock", HeaderText = "Low Stock?", Width = 100 });
+            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastUpdatedAt", HeaderText = "Last Updated", Width = 150 });
 
             dgvInventory.CellClick += (s, e) =>
             {
@@ -289,44 +327,48 @@ namespace Hardware.winforms
 
             GroupBox grpManage = new GroupBox
             {
-                Text = "Product Details (Click a row in the grid to edit)",
-                ForeColor = Color.White,
+                Text = "Product Management",
+                ForeColor = TextMuted,
                 Font = new Font("Segoe UI", 10),
-                Location = new Point(20, 385),
-                Size = new Size(1020, 195),
+                Location = new Point(24, 410),
+                Size = new Size(1034, 210),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
 
             txtAdjustProductId = new TextBox { Visible = false };
             grpManage.Controls.Add(txtAdjustProductId);
 
-            grpManage.Controls.Add(new Label { Text = "Code:", ForeColor = Color.LightGray, Location = new Point(100, 38), AutoSize = true });
-            txtProdCode = new TextBox { Location = new Point(155, 35), Width = 140 };
+            grpManage.Controls.Add(new Label { Text = "Code:", ForeColor = TextMuted, Location = new Point(25, 38), AutoSize = true });
+            txtProdCode = new TextBox { Location = new Point(75, 35), Width = 130, BackColor = BgDark, ForeColor = TextPrimary };
 
-            grpManage.Controls.Add(new Label { Text = "Name:", ForeColor = Color.LightGray, Location = new Point(315, 38), AutoSize = true });
-            txtProdName = new TextBox { Location = new Point(375, 35), Width = 210 };
+            grpManage.Controls.Add(new Label { Text = "Name:", ForeColor = TextMuted, Location = new Point(225, 38), AutoSize = true });
+            txtProdName = new TextBox { Location = new Point(275, 35), Width = 220, BackColor = BgDark, ForeColor = TextPrimary };
 
-            grpManage.Controls.Add(new Label { Text = "Price $:", ForeColor = Color.LightGray, Location = new Point(605, 38), AutoSize = true });
-            txtProdPrice = new TextBox { Location = new Point(675, 35), Width = 90 };
+            grpManage.Controls.Add(new Label { Text = "Price:", ForeColor = TextMuted, Location = new Point(515, 38), AutoSize = true });
+            txtProdPrice = new TextBox { Location = new Point(560, 35), Width = 90, BackColor = BgDark, ForeColor = TextPrimary };
 
-            grpManage.Controls.Add(new Label { Text = "Reorder:", ForeColor = Color.LightGray, Location = new Point(785, 38), AutoSize = true });
-            txtAdjustReorder = new TextBox { Location = new Point(860, 35), Width = 80, Text = "5" };
+            grpManage.Controls.Add(new Label { Text = "Reorder:", ForeColor = TextMuted, Location = new Point(670, 38), AutoSize = true });
+            txtAdjustReorder = new TextBox { Location = new Point(735, 35), Width = 80, Text = "5", BackColor = BgDark, ForeColor = TextPrimary };
 
             grpManage.Controls.AddRange(new Control[] { txtProdCode, txtProdName, txtProdPrice, txtAdjustReorder });
 
-            Button btnCreateProd = new Button { Text = "Add New Product", Location = new Point(20, 95), Width = 150, Height = 45, BackColor = Color.SeaGreen, ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
+            Button btnCreateProd = new Button { Text = "Add New", Location = new Point(25, 95), Width = 130, Height = 42, BackColor = AccentGreen, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            btnCreateProd.FlatAppearance.BorderSize = 0;
             btnCreateProd.Click += async (s, e) => await CreateProductAsync();
 
-            Button btnUpdateProd = new Button { Text = "Update Selected", Location = new Point(180, 95), Width = 150, Height = 45, BackColor = Color.DodgerBlue, ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
+            Button btnUpdateProd = new Button { Text = "Update", Location = new Point(165, 95), Width = 130, Height = 42, BackColor = AccentBlue, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            btnUpdateProd.FlatAppearance.BorderSize = 0;
             btnUpdateProd.Click += async (s, e) => await UpdateProductAsync();
 
-            Button btnDeleteProd = new Button { Text = "Delete Selected", Location = new Point(340, 95), Width = 150, Height = 45, BackColor = Color.IndianRed, ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
+            Button btnDeleteProd = new Button { Text = "Delete", Location = new Point(305, 95), Width = 130, Height = 42, BackColor = Color.FromArgb(239, 68, 68), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            btnDeleteProd.FlatAppearance.BorderSize = 0;
             btnDeleteProd.Click += async (s, e) => await DeleteProductAsync();
 
-            Panel pnlStock = new Panel { Location = new Point(520, 90), Size = new Size(480, 55), BackColor = Color.FromArgb(40, 40, 40) };
-            pnlStock.Controls.Add(new Label { Text = "Stock Adjust (+/-):", ForeColor = Color.White, Location = new Point(15, 18), AutoSize = true });
-            txtAdjustQty = new TextBox { Location = new Point(165, 15), Width = 80, Text = "0" };
-            Button btnAdjust = new Button { Text = "Apply Stock", Location = new Point(255, 13), Width = 210, Height = 30, BackColor = Color.DarkOrange, ForeColor = Color.White, FlatStyle = FlatStyle.Flat };
+            Panel pnlStock = new Panel { Location = new Point(460, 90), Size = new Size(545, 52), BackColor = BgDark };
+            pnlStock.Controls.Add(new Label { Text = "Stock Adjust (+/-):", ForeColor = TextPrimary, Location = new Point(15, 16), AutoSize = true });
+            txtAdjustQty = new TextBox { Location = new Point(150, 13), Width = 80, Text = "0", BackColor = CardBg, ForeColor = TextPrimary };
+            Button btnAdjust = new Button { Text = "Apply Stock Change", Location = new Point(245, 11), Width = 280, Height = 32, BackColor = Color.FromArgb(217, 119, 6), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            btnAdjust.FlatAppearance.BorderSize = 0;
             btnAdjust.Click += async (s, e) => await AdjustStockAsync();
             pnlStock.Controls.AddRange(new Control[] { txtAdjustQty, btnAdjust });
 
@@ -339,41 +381,48 @@ namespace Hardware.winforms
         // ==========================================
         private void BuildReportsView()
         {
-            viewReports = new Panel { Size = new Size(1060, 800), Padding = new Padding(20) };
+            viewReports = new Panel { Padding = new Padding(24) };
 
-            Label lblTitle = new Label { Text = "Transaction History & Business Analytics", ForeColor = Color.White, Font = new Font("Segoe UI", 14, FontStyle.Bold), AutoSize = true, Location = new Point(20, 20) };
+            Label lblTitle = new Label { Text = "Transaction History & Analytics", ForeColor = TextPrimary, Font = new Font("Segoe UI", 14, FontStyle.Bold), AutoSize = true, Location = new Point(24, 24) };
 
-            Button btnRefresh = new Button { Text = "🔄  Refresh Data", Location = new Point(880, 15), Width = 140, Height = 35, BackColor = Color.FromArgb(50, 50, 50), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Anchor = AnchorStyles.Top | AnchorStyles.Right };
+            Button btnRefresh = new Button { Text = "🔄 Refresh", Location = new Point(918, 20), Size = new Size(140, 38), BackColor = CardBg, ForeColor = TextPrimary, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Anchor = AnchorStyles.Top | AnchorStyles.Right };
+            btnRefresh.FlatAppearance.BorderColor = BorderColor;
             btnRefresh.Click += async (s, e) => await LoadReportsAsync();
 
-            // Interactive Summary Cards
-            Panel cardRevenue = CreateDataCard("Total Revenue", out lblRevenueValue, new Point(20, 70), Color.DarkSlateBlue, (s, e) => LoadReportContext("Revenue & Sales Summary"));
-            Panel cardTrans = CreateDataCard("Total Transactions", out lblTransValue, new Point(350, 70), Color.Teal, (s, e) => LoadReportContext("Transaction Logs"));
-            Panel cardTopProd = CreateDataCard("Top Products", out lblTopProdValue, new Point(680, 70), Color.Sienna, (s, e) => LoadReportContext("Top Selling Products (Top 5)"));
+            Panel cardRevenue = CreateDataCard("Total Revenue", out lblRevenueValue, new Point(24, 75), AccentBlue, (s, e) => LoadReportContext("Revenue & Sales Summary"));
+            Panel cardTrans = CreateDataCard("Total Transactions", out lblTransValue, new Point(360, 75), AccentGreen, (s, e) => LoadReportContext("Transaction Logs"));
+            Panel cardTopProd = CreateDataCard("Top Catalog Items", out lblTopProdValue, new Point(696, 75), Color.FromArgb(217, 119, 6), (s, e) => LoadReportContext("Top Selling Products"));
 
-            lblReportContext = new Label { Text = "Detailed View: Top Selling Products (Top 5)", ForeColor = Color.LightGray, Font = new Font("Segoe UI", 11, FontStyle.Italic), AutoSize = true, Location = new Point(20, 200) };
+            lblReportContext = new Label { Text = "Detailed View: Top Selling Products", ForeColor = TextMuted, Font = new Font("Segoe UI", 11, FontStyle.Italic), AutoSize = true, Location = new Point(24, 205) };
 
             dgvReportDetails = new DataGridView
             {
-                Location = new Point(20, 240),
-                Size = new Size(1020, 430),
+                Location = new Point(24, 240),
+                Size = new Size(1034, 490),
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 ReadOnly = true,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
-                BackgroundColor = Color.FromArgb(30, 30, 30),
-                ForeColor = Color.Black
+                BackgroundColor = CardBg,
+                ForeColor = TextPrimary,
+                GridColor = BorderColor,
+                BorderStyle = BorderStyle.None,
+                EnableHeadersVisualStyles = false
             };
+            dgvReportDetails.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 35, 35);
+            dgvReportDetails.ColumnHeadersDefaultCellStyle.ForeColor = TextPrimary;
+            dgvReportDetails.DefaultCellStyle.BackColor = CardBg;
+            dgvReportDetails.DefaultCellStyle.ForeColor = TextPrimary;
 
             viewReports.Controls.AddRange(new Control[] { lblTitle, btnRefresh, cardRevenue, cardTrans, cardTopProd, lblReportContext, dgvReportDetails });
         }
 
         private Panel CreateDataCard(string title, out Label valLabel, Point loc, Color stripColor, EventHandler onClick)
         {
-            Panel card = new Panel { Size = new Size(300, 110), Location = loc, BackColor = Color.FromArgb(35, 35, 35), Cursor = Cursors.Hand };
-            Panel strip = new Panel { Size = new Size(5, 110), Dock = DockStyle.Left, BackColor = stripColor };
+            Panel card = new Panel { Size = new Size(312, 110), Location = loc, BackColor = CardBg, Cursor = Cursors.Hand };
+            Panel strip = new Panel { Size = new Size(4, 110), Dock = DockStyle.Left, BackColor = stripColor };
 
-            Label lblTitle = new Label { Text = title, ForeColor = Color.LightGray, Font = new Font("Segoe UI", 10), Location = new Point(20, 15), AutoSize = true };
-            valLabel = new Label { Text = "-", ForeColor = Color.White, Font = new Font("Segoe UI", 20, FontStyle.Bold), Location = new Point(18, 45), AutoSize = true };
+            Label lblTitle = new Label { Text = title, ForeColor = TextMuted, Font = new Font("Segoe UI", 10), Location = new Point(20, 18), AutoSize = true };
+            valLabel = new Label { Text = "-", ForeColor = TextPrimary, Font = new Font("Segoe UI", 20, FontStyle.Bold), Location = new Point(18, 48), AutoSize = true };
 
             card.Click += onClick;
             strip.Click += onClick;
@@ -390,14 +439,7 @@ namespace Hardware.winforms
             if (_currentReport == null) return;
 
             dgvReportDetails.DataSource = null;
-            if (context.Contains("Top Products"))
-            {
-                dgvReportDetails.DataSource = _currentReport.TopSellingProducts;
-            }
-            else
-            {
-                dgvReportDetails.DataSource = _currentReport.TopSellingProducts;
-            }
+            dgvReportDetails.DataSource = _currentReport.TopSellingProducts;
         }
 
         // ==========================================
@@ -476,11 +518,6 @@ namespace Hardware.winforms
             {
                 var inventory = await _httpClient.GetFromJsonAsync<List<InventoryViewDto>>($"tenant/{_currentCompanyId}/inventory");
                 dgvInventory.DataSource = inventory;
-                foreach (DataGridViewRow row in dgvInventory.Rows)
-                {
-                    if (row.DataBoundItem is InventoryViewDto item && item.IsLowStock)
-                        row.DefaultCellStyle.BackColor = Color.LightCoral;
-                }
             }
             catch { }
         }
@@ -512,7 +549,7 @@ namespace Hardware.winforms
             var response = await _httpClient.PostAsJsonAsync($"tenant/{_currentCompanyId}/sales", salePayload);
             if (response.IsSuccessStatusCode)
             {
-                MessageBox.Show("Sale processed successfully!", "Success");
+                MessageBox.Show("Sale processed and committed to database successfully!", "Success");
                 _cart.Clear(); dgvCart.DataSource = null;
                 lblTotalAmount.Text = "Total: $0.00";
                 txtInvoiceNum.Text = "INV-" + DateTime.Now.ToString("fff");
@@ -534,7 +571,7 @@ namespace Hardware.winforms
                     lblRevenueValue.Text = $"${_currentReport.TotalRevenue:F2}";
                     lblTransValue.Text = $"{_currentReport.TotalTransactions}";
                     lblTopProdValue.Text = $"{_currentReport.TopSellingProducts.Count} Items";
-                    LoadReportContext("Top Selling Products (Top 5)");
+                    LoadReportContext("Top Selling Products");
                 }
             }
             catch { }

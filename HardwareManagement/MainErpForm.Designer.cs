@@ -28,15 +28,7 @@
         /// </summary>
         private void InitializeComponent()
         {
-            panel1 = new Panel();
             SuspendLayout();
-            // 
-            // panel1
-            // 
-            panel1.Location = new Point(-2, 0);
-            panel1.Name = "panel1";
-            panel1.Size = new Size(254, 556);
-            panel1.TabIndex = 0;
             // 
             // MainErpForm
             // 
@@ -44,14 +36,11 @@
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = SystemColors.ControlLightLight;
             ClientSize = new Size(1099, 554);
-            Controls.Add(panel1);
             Name = "MainErpForm";
             Text = "MainErpForm";
             ResumeLayout(false);
         }
 
         #endregion
-
-        private Panel panel1;
     }
 }
