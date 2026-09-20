@@ -17,8 +17,8 @@ namespace Hardware.winforms
                 {
                     int tenantId = loginForm.AuthenticatedCompanyId;
 
-                    // Proceed to Main ERP Form after successful login
-                    Application.Run(new MainErpForm());
+                    // Proceed to Main ERP Form with authenticated tenant ID after successful login
+                    Application.Run(new MainErpForm(tenantId));
                 }
             }
         }
