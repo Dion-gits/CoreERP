@@ -77,6 +77,78 @@ app.MapGet("/test-tenant/{companyId:int}", async (int companyId, ITenantDbContex
 });
 
 // =========================================================================
+// STORE CONFIGURATION, ROLES, T&CS (UC1, UC2, UC3, UC8, UC9, UC10)
+// =========================================================================
+
+// Branches (UC2)
+app.MapGet("/tenant/{companyId:int}/branches", async (int companyId, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    var branches = await tenantDb.StoreBranches.AsNoTracking().ToListAsync();
+    if (!branches.Any())
+    {
+        branches = new List<StoreBranch>
+        {
+            new StoreBranch { BranchName = "Main Flagship Branch", Location = "Downtown Center" },
+            new StoreBranch { BranchName = "Northside Depot", Location = "North Industrial Hub" },
+            new StoreBranch { BranchName = "Southside Retail", Location = "South Commercial Zone" }
+        };
+        tenantDb.StoreBranches.AddRange(branches);
+        await tenantDb.SaveChangesAsync();
+    }
+    return Results.Ok(branches);
+});
+
+app.MapPost("/tenant/{companyId:int}/branches", async (int companyId, StoreBranch branch, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    tenantDb.StoreBranches.Add(branch);
+    await tenantDb.SaveChangesAsync();
+    return Results.Created($"/tenant/{companyId}/branches/{branch.BranchId}", branch);
+});
+
+// Users / Roles (UC3)
+app.MapGet("/tenant/{companyId:int}/users", async (int companyId, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    var users = await tenantDb.Users.AsNoTracking().ToListAsync();
+    return Results.Ok(users);
+});
+
+// Store Terms & Conditions (UC8, UC9, UC10)
+app.MapGet("/tenant/{companyId:int}/terms", async (int companyId, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    var terms = await tenantDb.StoreTerms.FirstOrDefaultAsync();
+    if (terms == null)
+    {
+        terms = new StoreTerms();
+        tenantDb.StoreTerms.Add(terms);
+        await tenantDb.SaveChangesAsync();
+    }
+    return Results.Ok(terms);
+});
+
+app.MapPut("/tenant/{companyId:int}/terms", async (int companyId, StoreTerms updatedTerms, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    var terms = await tenantDb.StoreTerms.FirstOrDefaultAsync();
+    if (terms == null)
+    {
+        terms = updatedTerms;
+        tenantDb.StoreTerms.Add(terms);
+    }
+    else
+    {
+        terms.ReturnPolicy = updatedTerms.ReturnPolicy;
+        terms.CreditRules = updatedTerms.CreditRules;
+        terms.GeneralTerms = updatedTerms.GeneralTerms;
+    }
+    await tenantDb.SaveChangesAsync();
+    return Results.Ok(terms);
+});
+
+// =========================================================================
 // AUTHENTICATION & MULTI-TENANT LOGINS
 // =========================================================================
 app.MapPost("/auth/tenant-login", async (TenantLoginRequest request) =>
@@ -316,6 +388,131 @@ app.MapPost("/tenant/{companyId:int}/inventory/adjust", async (
     return Results.Ok(inventory);
 });
 
+// Unit Conversion: Convert Boxes to Products (UC23)
+app.MapPost("/tenant/{companyId:int}/inventory/convert-boxes", async (
+    int companyId,
+    int productId,
+    decimal boxesToConvert,
+    decimal factorToUnits,
+    ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    var inventory = await tenantDb.Inventories.FirstOrDefaultAsync(i => i.ProductId == productId);
+    if (inventory == null) return Results.NotFound(new { Message = "Product inventory not found." });
+
+    decimal itemsToAdd = boxesToConvert * factorToUnits;
+    inventory.QuantityOnHand += itemsToAdd;
+    inventory.LastUpdatedAt = DateTime.UtcNow;
+
+    var conversion = await tenantDb.UnitConversions.FirstOrDefaultAsync(u => u.ProductId == productId);
+    if (conversion == null)
+    {
+        conversion = new UnitConversion
+        {
+            ProductId = productId,
+            UnitName = "Box",
+            FactorToUnits = factorToUnits,
+            BoxesInStock = 0
+        };
+        tenantDb.UnitConversions.Add(conversion);
+    }
+    else
+    {
+        if (conversion.BoxesInStock >= boxesToConvert)
+        {
+            conversion.BoxesInStock -= boxesToConvert;
+        }
+    }
+
+    await tenantDb.SaveChangesAsync();
+    return Results.Ok(new { Message = $"Converted {boxesToConvert} boxes into {itemsToAdd} product units.", NewStock = inventory.QuantityOnHand });
+});
+
+// Stock Audit Requests & Validation (UC25)
+app.MapGet("/tenant/{companyId:int}/stock-audits", async (int companyId, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    var audits = await tenantDb.StockAuditRequests.Include(a => a.Product).AsNoTracking().ToListAsync();
+
+    if (!audits.Any())
+    {
+        audits = new List<StockAuditRequest>
+        {
+            new StockAuditRequest { ProductId = 1, RequestedBy = "Inventory Clerk", SystemQty = 50, PhysicalQty = 45, VarianceQty = -5, Status = "Pending" }
+        };
+        tenantDb.StockAuditRequests.AddRange(audits);
+        await tenantDb.SaveChangesAsync();
+    }
+
+    return Results.Ok(audits);
+});
+
+app.MapPost("/tenant/{companyId:int}/stock-audits", async (int companyId, StockAuditRequest auditRequest, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    auditRequest.VarianceQty = auditRequest.PhysicalQty - auditRequest.SystemQty;
+    auditRequest.Status = "Pending";
+    auditRequest.CreatedAt = DateTime.UtcNow;
+
+    tenantDb.StockAuditRequests.Add(auditRequest);
+    await tenantDb.SaveChangesAsync();
+    return Results.Created($"/tenant/{companyId}/stock-audits/{auditRequest.AuditRequestId}", auditRequest);
+});
+
+app.MapPut("/tenant/{companyId:int}/stock-audits/{auditId:int}/validate", async (int companyId, int auditId, string status, string validatedBy, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    var audit = await tenantDb.StockAuditRequests.FindAsync(auditId);
+    if (audit == null) return Results.NotFound();
+
+    audit.Status = status;
+    audit.ValidatedBy = validatedBy;
+
+    if (status.Equals("Approved", StringComparison.OrdinalIgnoreCase))
+    {
+        var inventory = await tenantDb.Inventories.FirstOrDefaultAsync(i => i.ProductId == audit.ProductId);
+        if (inventory != null)
+        {
+            inventory.QuantityOnHand = audit.PhysicalQty;
+            inventory.LastUpdatedAt = DateTime.UtcNow;
+        }
+    }
+
+    await tenantDb.SaveChangesAsync();
+    return Results.Ok(audit);
+});
+
+// Stock Transfers (UC11, UC12, UC13)
+app.MapGet("/tenant/{companyId:int}/stock-transfers", async (int companyId, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    var transfers = await tenantDb.StockTransfers.Include(t => t.Product).AsNoTracking().ToListAsync();
+    return Results.Ok(transfers);
+});
+
+app.MapPost("/tenant/{companyId:int}/stock-transfers", async (int companyId, StockTransfer transfer, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    transfer.TransferNumber = "TRF-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
+    transfer.Status = "Requested";
+    transfer.CreatedAt = DateTime.UtcNow;
+
+    tenantDb.StockTransfers.Add(transfer);
+    await tenantDb.SaveChangesAsync();
+    return Results.Created($"/tenant/{companyId}/stock-transfers/{transfer.TransferId}", transfer);
+});
+
+app.MapPut("/tenant/{companyId:int}/stock-transfers/{transferId:int}/status", async (int companyId, int transferId, string status, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    var transfer = await tenantDb.StockTransfers.FindAsync(transferId);
+    if (transfer == null) return Results.NotFound();
+
+    transfer.Status = status;
+    await tenantDb.SaveChangesAsync();
+    return Results.Ok(transfer);
+});
+
 // ==========================================
 // 2. SALES MODULE ENDPOINTS
 // ==========================================
@@ -369,8 +566,58 @@ app.MapPost("/tenant/{companyId:int}/sales", async (
 });
 
 // ==========================================
-// 3. PAYROLL MODULE ENDPOINTS (UC14, UC15)
+// 3. HR PAYROLL, EMPLOYEES & UNPAID EXPENSES (UC4, UC6, UC7, UC14, UC15)
 // ==========================================
+
+// Employee Records (UC15)
+app.MapGet("/tenant/{companyId:int}/employees", async (int companyId, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    var employees = await tenantDb.EmployeeRecords.AsNoTracking().ToListAsync();
+
+    if (!employees.Any())
+    {
+        employees = new List<EmployeeRecord>
+        {
+            new EmployeeRecord { FullName = "Alice Smith", Role = "Cashier", BaseSalary = 2500m },
+            new EmployeeRecord { FullName = "Bob Jones", Role = "Inventory Staff", BaseSalary = 2800m },
+            new EmployeeRecord { FullName = "Charlie Davis", Role = "Branch Manager", BaseSalary = 4500m },
+            new EmployeeRecord { FullName = "Diana Prince", Role = "HR Manager", BaseSalary = 4200m }
+        };
+        tenantDb.EmployeeRecords.AddRange(employees);
+        await tenantDb.SaveChangesAsync();
+    }
+
+    return Results.Ok(employees);
+});
+
+// Unpaid Expenses & Debts (UC6)
+app.MapGet("/tenant/{companyId:int}/unpaid-expenses", async (int companyId, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    var expenses = await tenantDb.UnpaidExpenses.AsNoTracking().ToListAsync();
+
+    if (!expenses.Any())
+    {
+        expenses = new List<UnpaidExpense>
+        {
+            new UnpaidExpense { Title = "Electric & Energy Utility Bill", Category = "Utilities", Amount = 450.00m, DueDate = DateTime.UtcNow.AddDays(7), IsPaid = false },
+            new UnpaidExpense { Title = "Warehouse Facility Lease", Category = "Rent", Amount = 2200.00m, DueDate = DateTime.UtcNow.AddDays(12), IsPaid = false }
+        };
+        tenantDb.UnpaidExpenses.AddRange(expenses);
+        await tenantDb.SaveChangesAsync();
+    }
+
+    return Results.Ok(expenses);
+});
+
+app.MapPost("/tenant/{companyId:int}/unpaid-expenses", async (int companyId, UnpaidExpense expense, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    tenantDb.UnpaidExpenses.Add(expense);
+    await tenantDb.SaveChangesAsync();
+    return Results.Created($"/tenant/{companyId}/unpaid-expenses/{expense.ExpenseId}", expense);
+});
 
 app.MapGet("/tenant/{companyId:int}/payroll", async (int companyId, ITenantDbContextFactory tenantFactory) =>
 {
