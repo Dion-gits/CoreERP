@@ -77,6 +77,62 @@ app.MapGet("/test-tenant/{companyId:int}", async (int companyId, ITenantDbContex
 });
 
 // =========================================================================
+// AUTHENTICATION & MULTI-TENANT LOGINS
+// =========================================================================
+app.MapPost("/auth/tenant-login", async (TenantLoginRequest request) =>
+{
+    string email = request.TenantEmail.Trim().ToLower();
+    if (request.Password != "123123")
+    {
+        return Results.BadRequest(new { Message = "Invalid password. Default password is 123123." });
+    }
+
+    int companyId = email switch
+    {
+        "tenant1@email" => 1,
+        "tenant2@email" => 2,
+        "tenant3@email" => 3,
+        _ => 0
+    };
+
+    if (companyId == 0)
+    {
+        return Results.NotFound(new { Message = "Tenant account not found. Valid tenant emails: tenant1@email, tenant2@email, tenant3@email." });
+    }
+
+    return Results.Ok(new
+    {
+        CompanyId = companyId,
+        TenantEmail = email,
+        CompanyName = $"Tenant {companyId} Enterprise"
+    });
+});
+
+app.MapPost("/auth/user-login", async (UserLoginRequest request) =>
+{
+    if (request.Password != "123123")
+    {
+        return Results.BadRequest(new { Message = "Invalid user password. Default password is 123123." });
+    }
+
+    var validRoles = new[] { "Super Admin", "Owner", "HR Manager", "Branch Manager", "Cashier", "Inventory Staff" };
+    string role = request.Role.Trim();
+
+    if (!validRoles.Contains(role, StringComparer.OrdinalIgnoreCase))
+    {
+        return Results.BadRequest(new { Message = "Invalid role specified." });
+    }
+
+    return Results.Ok(new
+    {
+        CompanyId = request.CompanyId,
+        UserEmail = request.UserEmail,
+        Role = role,
+        FullName = string.IsNullOrWhiteSpace(request.FullName) ? $"{role} User" : request.FullName
+    });
+});
+
+// =========================================================================
 // TENANT CRM ENDPOINTS
 // =========================================================================
 app.MapPost("/tenant/{companyId:int}/customers", async (
@@ -138,12 +194,20 @@ app.MapGet("/tenant/{companyId:int}/suppliers", async (
 // ==========================================
 
 // GET: Unified Inventory & Product List
-app.MapGet("/tenant/{companyId:int}/inventory", async (int companyId, ITenantDbContextFactory tenantFactory) =>
+app.MapGet("/tenant/{companyId:int}/inventory", async (int companyId, string? search, ITenantDbContextFactory tenantFactory) =>
 {
     await using var tenantDb = await tenantFactory.CreateAsync(companyId);
-    var inventory = await tenantDb.Inventories
+    var query = tenantDb.Inventories
         .Include(i => i.Product)
-        .AsNoTracking()
+        .AsNoTracking();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        string term = search.Trim().ToLower();
+        query = query.Where(i => i.Product != null && (i.Product.ProductName.ToLower().Contains(term) || i.Product.ProductCode.ToLower().Contains(term)));
+    }
+
+    var inventory = await query
         .Select(i => new {
             i.InventoryId,
             i.ProductId,
@@ -223,14 +287,12 @@ app.MapPost("/tenant/{companyId:int}/inventory/adjust", async (
 {
     await using var tenantDb = await tenantFactory.CreateAsync(companyId);
 
-    // 1. Check if the Product exists
     var productExists = await tenantDb.Products.AnyAsync(p => p.ProductId == productId);
     if (!productExists)
     {
         return Results.NotFound(new { Message = $"Product ID {productId} does not exist in Tenant {companyId} database." });
     }
 
-    // 2. Fetch or create the Inventory record
     var inventory = await tenantDb.Inventories.FirstOrDefaultAsync(i => i.ProductId == productId);
     if (inventory == null)
     {
@@ -255,7 +317,7 @@ app.MapPost("/tenant/{companyId:int}/inventory/adjust", async (
 });
 
 // ==========================================
-// 2. SALES MODULE ENDPOINTS (Auto Stock Deduction)
+// 2. SALES MODULE ENDPOINTS
 // ==========================================
 
 app.MapPost("/tenant/{companyId:int}/sales", async (
@@ -307,7 +369,134 @@ app.MapPost("/tenant/{companyId:int}/sales", async (
 });
 
 // ==========================================
-// 3. REPORTS MODULE ENDPOINTS
+// 3. PAYROLL MODULE ENDPOINTS (UC14, UC15)
+// ==========================================
+
+app.MapGet("/tenant/{companyId:int}/payroll", async (int companyId, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    var records = await tenantDb.PayrollRecords.AsNoTracking().ToListAsync();
+
+    // Seed dummy payroll records if empty for test convenience
+    if (!records.Any())
+    {
+        records = new List<PayrollRecord>
+        {
+            new PayrollRecord { EmployeeId = 101, EmployeeName = "Alice Smith", Role = "Cashier", BaseSalary = 2500m, Bonuses = 150m, Deductions = 100m, NetPay = 2550m, PayPeriod = "2025-05", Status = "Pending" },
+            new PayrollRecord { EmployeeId = 102, EmployeeName = "Bob Jones", Role = "Inventory Staff", BaseSalary = 2800m, Bonuses = 200m, Deductions = 120m, NetPay = 2880m, PayPeriod = "2025-05", Status = "Pending" },
+            new PayrollRecord { EmployeeId = 103, EmployeeName = "Charlie Davis", Role = "Branch Manager", BaseSalary = 4500m, Bonuses = 500m, Deductions = 300m, NetPay = 4700m, PayPeriod = "2025-05", Status = "Pending" }
+        };
+        tenantDb.PayrollRecords.AddRange(records);
+        await tenantDb.SaveChangesAsync();
+    }
+
+    return Results.Ok(records);
+});
+
+app.MapPost("/tenant/{companyId:int}/payroll/process", async (int companyId, PayrollRecord record, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    record.NetPay = record.BaseSalary + record.Bonuses - record.Deductions;
+    record.Status = "Processed";
+    record.ProcessedAt = DateTime.UtcNow;
+
+    tenantDb.PayrollRecords.Add(record);
+    await tenantDb.SaveChangesAsync();
+
+    return Results.Created($"/tenant/{companyId}/payroll/{record.PayrollId}", record);
+});
+
+app.MapPut("/tenant/{companyId:int}/payroll/{payrollId:int}/approve", async (int companyId, int payrollId, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    var record = await tenantDb.PayrollRecords.FindAsync(payrollId);
+    if (record == null) return Results.NotFound();
+
+    record.Status = "Paid";
+    record.ProcessedAt = DateTime.UtcNow;
+    await tenantDb.SaveChangesAsync();
+
+    return Results.Ok(record);
+});
+
+// ==========================================
+// 4. SUPPLIER ORDERS & BUYING ENDPOINTS (UC16, UC17, UC18, UC7)
+// ==========================================
+
+app.MapGet("/tenant/{companyId:int}/purchase-orders", async (int companyId, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    var orders = await tenantDb.PurchaseOrders.Include(po => po.Items).AsNoTracking().ToListAsync();
+
+    if (!orders.Any())
+    {
+        orders = new List<PurchaseOrder>
+        {
+            new PurchaseOrder
+            {
+                OrderNumber = "PO-2025-001", SupplierId = 1, SupplierName = "Apex Hardware Wholesale", TotalAmount = 1500.00m, Status = "Draft", CreatedAt = DateTime.UtcNow,
+                Items = new List<PurchaseOrderItem> { new PurchaseOrderItem { ProductId = 1, ProductName = "Standard Hammer", Quantity = 100, UnitCost = 15.00m, SubTotal = 1500.00m } }
+            },
+            new PurchaseOrder
+            {
+                OrderNumber = "PO-2025-002", SupplierId = 2, SupplierName = "BuildRight Corp", TotalAmount = 3200.00m, Status = "Validated", CreatedAt = DateTime.UtcNow,
+                Items = new List<PurchaseOrderItem> { new PurchaseOrderItem { ProductId = 2, ProductName = "Screwdriver Set", Quantity = 160, UnitCost = 20.00m, SubTotal = 3200.00m } }
+            }
+        };
+        tenantDb.PurchaseOrders.AddRange(orders);
+        await tenantDb.SaveChangesAsync();
+    }
+
+    return Results.Ok(orders);
+});
+
+app.MapPost("/tenant/{companyId:int}/purchase-orders", async (int companyId, PurchaseOrder order, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    order.OrderNumber = "PO-" + DateTime.Now.ToString("yyyyMMdd-HHmmss");
+    order.Status = "Draft";
+    order.CreatedAt = DateTime.UtcNow;
+    order.TotalAmount = order.Items.Sum(i => i.Quantity * i.UnitCost);
+
+    foreach (var item in order.Items)
+    {
+        item.SubTotal = item.Quantity * item.UnitCost;
+    }
+
+    tenantDb.PurchaseOrders.Add(order);
+    await tenantDb.SaveChangesAsync();
+
+    return Results.Created($"/tenant/{companyId}/purchase-orders/{order.PurchaseOrderId}", order);
+});
+
+app.MapPut("/tenant/{companyId:int}/purchase-orders/{orderId:int}/status", async (int companyId, int orderId, string status, ITenantDbContextFactory tenantFactory) =>
+{
+    await using var tenantDb = await tenantFactory.CreateAsync(companyId);
+    var order = await tenantDb.PurchaseOrders.Include(p => p.Items).FirstOrDefaultAsync(p => p.PurchaseOrderId == orderId);
+    if (order == null) return Results.NotFound();
+
+    order.Status = status;
+
+    // If status changed to Received, adjust stock in inventory automatically
+    if (status.Equals("Received", StringComparison.OrdinalIgnoreCase))
+    {
+        foreach (var item in order.Items)
+        {
+            var inventory = await tenantDb.Inventories.FirstOrDefaultAsync(i => i.ProductId == item.ProductId);
+            if (inventory != null)
+            {
+                inventory.QuantityOnHand += item.Quantity;
+                inventory.LastUpdatedAt = DateTime.UtcNow;
+            }
+        }
+    }
+
+    await tenantDb.SaveChangesAsync();
+    return Results.Ok(order);
+});
+
+// ==========================================
+// 5. REPORTS & DASHBOARD BI ENDPOINTS (UC4, UC6, UC8, UC9, UC10, UC21, UC22, UC23, UC24, UC25)
 // ==========================================
 
 app.MapGet("/tenant/{companyId:int}/reports/sales-summary", async (
@@ -321,16 +510,13 @@ app.MapGet("/tenant/{companyId:int}/reports/sales-summary", async (
     var start = startDate ?? DateTime.UtcNow.AddDays(-30);
     var end = endDate ?? DateTime.UtcNow;
 
-    // 1. Build base query for active sales within the date range
     var salesQuery = tenantDb.Sales
         .AsNoTracking()
         .Where(s => s.SaleDate >= start && s.SaleDate <= end && s.IsActive);
 
-    // 2. Calculate aggregated metrics (declaring local variables)
     var totalRevenue = await salesQuery.SumAsync(s => (decimal?)s.TotalAmount) ?? 0m;
     var totalTransactions = await salesQuery.CountAsync();
 
-    // 3. Query top selling products
     var topProducts = await tenantDb.SaleItems
         .AsNoTracking()
         .Where(si => si.Sale != null && si.Sale.SaleDate >= start && si.Sale.SaleDate <= end)
@@ -345,7 +531,6 @@ app.MapGet("/tenant/{companyId:int}/reports/sales-summary", async (
         .Take(5)
         .ToListAsync();
 
-    // 4. Return the calculated values
     return Results.Ok(new
     {
         TenantId = companyId,
@@ -357,36 +542,8 @@ app.MapGet("/tenant/{companyId:int}/reports/sales-summary", async (
     });
 });
 
-app.MapPost("/auth/login", async (LoginRequest request, MasterCoreErpDbContext db) =>
-{
-    string email = request.Email.Trim().ToLower();
-
-    if (request.Password != "123123")
-    {
-        return Results.Unauthorized();
-    }
-
-    int companyId = email switch
-    {
-        "tenant1@email" => 1,
-        "tenant2@email" => 2,
-        "tenant3@email" => 3,
-        _ => 0
-    };
-
-    if (companyId == 0)
-    {
-        return Results.Unauthorized();
-    }
-
-    return Results.Ok(new
-    {
-        CompanyId = companyId,
-        CompanyName = $"Tenant {companyId} (Company)"
-    });
-});
-
 app.MapControllers();
 app.Run();
 
-public record LoginRequest(string Email, string Password);
+public record TenantLoginRequest(string TenantEmail, string Password);
+public record UserLoginRequest(int CompanyId, string UserEmail, string Role, string FullName, string Password);
