@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
@@ -14,8 +14,14 @@ namespace Hardware.winforms
     {
         private readonly HttpClient _httpClient;
         private int _currentCompanyId;
+        private string _userRole;
+        private string _tenantEmail;
+
         private List<CartItemDto> _cart = new List<CartItemDto>();
-        private SalesSummaryReportDto _currentReport;
+        private SalesSummaryReportDto? _currentReport;
+        private List<InventoryViewDto> _allProducts = new List<InventoryViewDto>();
+        private List<PayrollRecordDto> _payrollList = new List<PayrollRecordDto>();
+        private List<PurchaseOrderDto> _poList = new List<PurchaseOrderDto>();
 
         // Modern Theme Palette
         private readonly Color BgDark = Color.FromArgb(18, 18, 18);
@@ -23,6 +29,9 @@ namespace Hardware.winforms
         private readonly Color BorderColor = Color.FromArgb(45, 45, 45);
         private readonly Color AccentGreen = Color.FromArgb(16, 185, 129);
         private readonly Color AccentBlue = Color.FromArgb(59, 130, 246);
+        private readonly Color AccentOrange = Color.FromArgb(245, 158, 11);
+        private readonly Color AccentRed = Color.FromArgb(239, 68, 68);
+        private readonly Color AccentPurple = Color.FromArgb(139, 92, 246);
         private readonly Color TextPrimary = Color.FromArgb(243, 244, 246);
         private readonly Color TextMuted = Color.FromArgb(156, 163, 175);
 
@@ -31,15 +40,28 @@ namespace Hardware.winforms
         private Panel pnlMainContent;
 
         // Navigation Buttons
+        private List<Button> navButtons = new List<Button>();
+        private Button btnNavDashboard;
         private Button btnNavSales;
         private Button btnNavInventory;
+        private Button btnNavPayroll;
+        private Button btnNavSupplierOrders;
         private Button btnNavReports;
         private Button btnLogout;
 
         // View Panels
+        private Panel viewDashboard;
         private Panel viewSales;
         private Panel viewInventory;
+        private Panel viewPayroll;
+        private Panel viewSupplierOrders;
         private Panel viewReports;
+
+        // Dashboard Controls
+        private FlowLayoutPanel pnlDataCards;
+        private Panel pnlGraphContainer;
+        private DataGridView dgvDashboardGrid;
+        private Label lblDashContext;
 
         // Inventory Controls
         private DataGridView dgvInventory;
@@ -48,25 +70,40 @@ namespace Hardware.winforms
 
         // Sales Controls
         private DataGridView dgvCart;
+        private TextBox txtSearchPOS;
+        private DataGridView dgvSearchResults;
         private TextBox txtInvoiceNum, txtCustomerId, txtSaleProductId, txtSaleQty, txtUnitPrice;
         private Label lblTotalAmount;
+
+        // Payroll Controls
+        private DataGridView dgvPayroll;
+        private TextBox txtEmpName, txtEmpRole, txtBaseSalary, txtBonus, txtDeductions;
+
+        // Supplier Orders Controls
+        private DataGridView dgvSupplierOrders;
+        private ComboBox cbSuppliers;
+        private TextBox txtPoProdId, txtPoQty, txtPoCost;
 
         // Transaction History & Reports Controls
         private Label lblRevenueValue, lblTransValue, lblTopProdValue;
         private DataGridView dgvReportDetails;
         private Label lblReportContext;
+        private Panel pnlReportChart;
 
-        public MainErpForm(int companyId = 1)
+        public MainErpForm(int companyId = 1, string userRole = "Owner", string tenantEmail = "tenant1@email")
         {
             _currentCompanyId = companyId;
+            _userRole = string.IsNullOrWhiteSpace(userRole) ? "Owner" : userRole;
+            _tenantEmail = string.IsNullOrWhiteSpace(tenantEmail) ? "tenant1@email" : tenantEmail;
+
             InitializeComponentCustom();
             _httpClient = new HttpClient { BaseAddress = new Uri("https://localhost:7166/") };
         }
 
         private void InitializeComponentCustom()
         {
-            this.Text = "Micro-Enterprise ERP - Modern Core";
-            this.Size = new Size(1320, 820);
+            this.Text = $"Small Enterprise ERP - Tenant {_currentCompanyId} [{_userRole}]";
+            this.WindowState = FormWindowState.Maximized;
             this.MinimumSize = new Size(1200, 750);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = BgDark;
@@ -78,7 +115,7 @@ namespace Hardware.winforms
             pnlSidebar = new Panel
             {
                 Dock = DockStyle.Left,
-                Width = 240,
+                Width = 260,
                 BackColor = CardBg
             };
 
@@ -86,19 +123,40 @@ namespace Hardware.winforms
             {
                 Text = "⚡ CORE ERP",
                 ForeColor = TextPrimary,
-                Font = new Font("Segoe UI", 13, FontStyle.Bold),
-                Location = new Point(20, 24),
+                Font = new Font("Segoe UI", 14, FontStyle.Bold),
+                Location = new Point(20, 20),
                 AutoSize = true
             };
+
+            Label lblRoleBadge = new Label
+            {
+                Text = $"👤 {_userRole} ({_tenantEmail})",
+                ForeColor = AccentBlue,
+                Font = new Font("Segoe UI", 9, FontStyle.Bold),
+                Location = new Point(20, 50),
+                AutoSize = true
+            };
+
             pnlSidebar.Controls.Add(lblAppTitle);
+            pnlSidebar.Controls.Add(lblRoleBadge);
 
-            btnNavSales = CreateSidebarButton("🛒  Point of Sale", 85);
-            btnNavInventory = CreateSidebarButton("📦  Inventory Hub", 140);
-            btnNavReports = CreateSidebarButton("📊  Transaction History", 195);
+            int btnTop = 90;
+            btnNavDashboard = CreateSidebarButton("📈  Dashboard & BI", ref btnTop);
+            btnNavSales = CreateSidebarButton("🛒  Point of Sale (POS)", ref btnTop);
+            btnNavInventory = CreateSidebarButton("📦  Inventory & Stock", ref btnTop);
+            btnNavPayroll = CreateSidebarButton("💵  HR & Payroll", ref btnTop);
+            btnNavSupplierOrders = CreateSidebarButton("🏭  Supplier Buying & PO", ref btnTop);
+            btnNavReports = CreateSidebarButton("📊  Reports & Analytics", ref btnTop);
 
+            btnNavDashboard.Click += (s, e) => SwitchView(viewDashboard, btnNavDashboard);
             btnNavSales.Click += (s, e) => SwitchView(viewSales, btnNavSales);
             btnNavInventory.Click += (s, e) => SwitchView(viewInventory, btnNavInventory);
+            btnNavPayroll.Click += (s, e) => SwitchView(viewPayroll, btnNavPayroll);
+            btnNavSupplierOrders.Click += (s, e) => SwitchView(viewSupplierOrders, btnNavSupplierOrders);
             btnNavReports.Click += (s, e) => SwitchView(viewReports, btnNavReports);
+
+            // Filter menu access based on role use cases
+            ApplyRoleBasedNavigation();
 
             btnLogout = new Button
             {
@@ -106,7 +164,7 @@ namespace Hardware.winforms
                 Dock = DockStyle.Bottom,
                 Height = 50,
                 FlatStyle = FlatStyle.Flat,
-                ForeColor = Color.FromArgb(239, 68, 68),
+                ForeColor = AccentRed,
                 BackColor = CardBg,
                 Font = new Font("Segoe UI", 10, FontStyle.Regular),
                 TextAlign = ContentAlignment.MiddleLeft,
@@ -121,6 +179,11 @@ namespace Hardware.winforms
                 if (loginForm.ShowDialog() == DialogResult.OK)
                 {
                     _currentCompanyId = loginForm.AuthenticatedCompanyId;
+                    _userRole = loginForm.AuthenticatedRole;
+                    _tenantEmail = loginForm.AuthenticatedTenantEmail;
+                    lblRoleBadge.Text = $"👤 {_userRole} ({_tenantEmail})";
+                    this.Text = $"Small Enterprise ERP - Tenant {_currentCompanyId} [{_userRole}]";
+                    ApplyRoleBasedNavigation();
                     this.Show();
                     _ = RefreshAllDataAsync();
                 }
@@ -128,7 +191,6 @@ namespace Hardware.winforms
             };
 
             pnlSidebar.Controls.Add(btnLogout);
-            pnlSidebar.Controls.AddRange(new Control[] { btnNavSales, btnNavInventory, btnNavReports });
 
             // ==========================================
             // 2. MAIN CONTENT AREA 
@@ -139,24 +201,28 @@ namespace Hardware.winforms
                 BackColor = BgDark
             };
 
+            BuildDashboardView();
             BuildSalesView();
             BuildInventoryView();
+            BuildPayrollView();
+            BuildSupplierOrdersView();
             BuildReportsView();
 
             this.Controls.Add(pnlMainContent);
             this.Controls.Add(pnlSidebar);
 
-            SwitchView(viewSales, btnNavSales);
+            // Switch to initial allowed view
+            SwitchView(viewDashboard, btnNavDashboard);
             this.Load += async (s, e) => await RefreshAllDataAsync();
         }
 
-        private Button CreateSidebarButton(string text, int top)
+        private Button CreateSidebarButton(string text, ref int top)
         {
-            return new Button
+            var btn = new Button
             {
                 Text = text,
                 Location = new Point(12, top),
-                Size = new Size(216, 45),
+                Size = new Size(236, 45),
                 FlatStyle = FlatStyle.Flat,
                 ForeColor = TextMuted,
                 BackColor = CardBg,
@@ -166,6 +232,58 @@ namespace Hardware.winforms
                 Cursor = Cursors.Hand,
                 FlatAppearance = { BorderSize = 0 }
             };
+            top += 52;
+            pnlSidebar.Controls.Add(btn);
+            navButtons.Add(btn);
+            return btn;
+        }
+
+        private void ApplyRoleBasedNavigation()
+        {
+            // Reset visibility
+            btnNavDashboard.Visible = true;
+            btnNavSales.Visible = false;
+            btnNavInventory.Visible = false;
+            btnNavPayroll.Visible = false;
+            btnNavSupplierOrders.Visible = false;
+            btnNavReports.Visible = false;
+
+            switch (_userRole)
+            {
+                case "Super Admin": // UC1, UC8
+                    btnNavDashboard.Visible = true;
+                    btnNavReports.Visible = true;
+                    break;
+                case "Owner": // UC2, UC3, UC4, UC5, UC9, UC21
+                    btnNavDashboard.Visible = true;
+                    btnNavSales.Visible = true;
+                    btnNavInventory.Visible = true;
+                    btnNavSupplierOrders.Visible = true;
+                    btnNavPayroll.Visible = true;
+                    btnNavReports.Visible = true;
+                    break;
+                case "HR Manager": // UC4, UC6, UC7, UC14, UC15
+                    btnNavDashboard.Visible = true;
+                    btnNavPayroll.Visible = true;
+                    btnNavSupplierOrders.Visible = true; // UC7
+                    btnNavReports.Visible = true;
+                    break;
+                case "Branch Manager": // UC4, UC11, UC12, UC18, UC21, UC25
+                    btnNavDashboard.Visible = true;
+                    btnNavInventory.Visible = true;
+                    btnNavSupplierOrders.Visible = true; // UC18
+                    btnNavReports.Visible = true;
+                    break;
+                case "Cashier": // UC10, UC19, UC20
+                    btnNavDashboard.Visible = true;
+                    btnNavSales.Visible = true;
+                    break;
+                case "Inventory Staff": // UC13, UC16, UC17, UC22, UC23, UC24, UC25
+                    btnNavDashboard.Visible = true;
+                    btnNavInventory.Visible = true;
+                    btnNavSupplierOrders.Visible = true; // UC16, UC17
+                    break;
+            }
         }
 
         private void SwitchView(Panel targetView, Button activeBtn)
@@ -174,13 +292,10 @@ namespace Hardware.winforms
             targetView.Dock = DockStyle.Fill;
             pnlMainContent.Controls.Add(targetView);
 
-            foreach (Control c in pnlSidebar.Controls)
+            foreach (var btn in navButtons)
             {
-                if (c is Button btn && btn != btnLogout)
-                {
-                    btn.BackColor = CardBg;
-                    btn.ForeColor = TextMuted;
-                }
+                btn.BackColor = CardBg;
+                btn.ForeColor = TextMuted;
             }
 
             activeBtn.BackColor = Color.FromArgb(40, 40, 40);
@@ -188,7 +303,170 @@ namespace Hardware.winforms
         }
 
         // ==========================================
-        // MODULE 1: MODERN POS / SALES VIEW
+        // MODULE 0: ROLE-BASED DASHBOARD & BI (DATA CARDS & GRAPHS)
+        // ==========================================
+        private void BuildDashboardView()
+        {
+            viewDashboard = new Panel { Padding = new Padding(24), AutoScroll = true };
+
+            Label lblTitle = new Label { Text = $"Dashboard & Business Intelligence — [{_userRole}]", ForeColor = TextPrimary, Font = new Font("Segoe UI", 16, FontStyle.Bold), AutoSize = true, Location = new Point(24, 20) };
+            Label lblSub = new Label { Text = "Interactive data cards & real-time analytics visualizer", ForeColor = TextMuted, Font = new Font("Segoe UI", 10), AutoSize = true, Location = new Point(24, 52) };
+
+            pnlDataCards = new FlowLayoutPanel
+            {
+                Location = new Point(24, 85),
+                Size = new Size(1250, 130),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                AutoScroll = true
+            };
+
+            lblDashContext = new Label { Text = "📊 Analytics Chart View", ForeColor = TextPrimary, Font = new Font("Segoe UI", 12, FontStyle.Bold), AutoSize = true, Location = new Point(24, 230) };
+
+            pnlGraphContainer = new Panel
+            {
+                Location = new Point(24, 260),
+                Size = new Size(1250, 220),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                BackColor = CardBg
+            };
+            pnlGraphContainer.Paint += RenderDashboardGraph;
+
+            dgvDashboardGrid = new DataGridView
+            {
+                Location = new Point(24, 500),
+                Size = new Size(1250, 250),
+                Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
+                ReadOnly = true,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                BackgroundColor = CardBg,
+                ForeColor = TextPrimary,
+                GridColor = BorderColor,
+                BorderStyle = BorderStyle.None,
+                EnableHeadersVisualStyles = false
+            };
+            dgvDashboardGrid.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 35, 35);
+            dgvDashboardGrid.ColumnHeadersDefaultCellStyle.ForeColor = TextPrimary;
+            dgvDashboardGrid.DefaultCellStyle.BackColor = CardBg;
+            dgvDashboardGrid.DefaultCellStyle.ForeColor = TextPrimary;
+
+            viewDashboard.Controls.AddRange(new Control[] { lblTitle, lblSub, pnlDataCards, lblDashContext, pnlGraphContainer, dgvDashboardGrid });
+        }
+
+        private void LoadDashboardRoleCards()
+        {
+            pnlDataCards.Controls.Clear();
+
+            switch (_userRole)
+            {
+                case "Super Admin":
+                    pnlDataCards.Controls.Add(CreateDataCard("Active Tenants", "3 Tenants", AccentBlue, (s, e) => ShowDashDetail("Tenant Accounts & Subscriptions", _allProducts)));
+                    pnlDataCards.Controls.Add(CreateDataCard("System Rules", "8 Enforced", AccentPurple, (s, e) => ShowDashDetail("System Terms & Rules (UC8)", _allProducts)));
+                    break;
+                case "Owner":
+                    pnlDataCards.Controls.Add(CreateDataCard("Total Revenue", "$" + (_currentReport?.TotalRevenue ?? 0).ToString("N2"), AccentGreen, (s, e) => ShowDashDetail("Revenues & Sales Reports (UC4)", _currentReport?.TopSellingProducts)));
+                    pnlDataCards.Controls.Add(CreateDataCard("Catalog Items", $"{_allProducts.Count} Items", AccentBlue, (s, e) => ShowDashDetail("Product List (UC21)", _allProducts)));
+                    pnlDataCards.Controls.Add(CreateDataCard("Store Branches", "3 Active", AccentOrange, (s, e) => ShowDashDetail("Store & Branches Overview (UC2, UC5)", _allProducts)));
+                    pnlDataCards.Controls.Add(CreateDataCard("Return Policy", "Standard 7-Day", AccentPurple, (s, e) => ShowDashDetail("Store Return & Credit Rules (UC9)", _allProducts)));
+                    break;
+                case "HR Manager":
+                    pnlDataCards.Controls.Add(CreateDataCard("Total Payroll", "$" + _payrollList.Sum(p => p.NetPay).ToString("N2"), AccentPurple, (s, e) => ShowDashDetail("Process Employee Payroll (UC14)", _payrollList)));
+                    pnlDataCards.Controls.Add(CreateDataCard("Employee Records", $"{_payrollList.Count} Staff", AccentBlue, (s, e) => ShowDashDetail("Employee Records (UC15)", _payrollList)));
+                    pnlDataCards.Controls.Add(CreateDataCard("Pending PO Funds", $"{_poList.Count(p => p.Status == "Validated")} Pending", AccentOrange, (s, e) => ShowDashDetail("Approve Supplier PO Funds (UC7)", _poList)));
+                    pnlDataCards.Controls.Add(CreateDataCard("Unpaid Bills / Debts", "$0.00", AccentRed, (s, e) => ShowDashDetail("Track Unpaid Bills & Debts (UC6)", _payrollList)));
+                    break;
+                case "Branch Manager":
+                    pnlDataCards.Controls.Add(CreateDataCard("Total Sales", $"{_currentReport?.TotalTransactions ?? 0} Trans", AccentGreen, (s, e) => ShowDashDetail("Branch Sales Reports (UC4)", _currentReport?.TopSellingProducts)));
+                    pnlDataCards.Controls.Add(CreateDataCard("Supply Orders", $"{_poList.Count} Orders", AccentOrange, (s, e) => ShowDashDetail("Validate Supply Orders (UC18)", _poList)));
+                    pnlDataCards.Controls.Add(CreateDataCard("Low Stock Alerts", $"{_allProducts.Count(p => p.IsLowStock)} Items", AccentRed, (s, e) => ShowDashDetail("Audit Physical Stocks (UC25)", _allProducts.Where(p => p.IsLowStock).ToList())));
+                    break;
+                case "Cashier":
+                    pnlDataCards.Controls.Add(CreateDataCard("Active Cart", $"{_cart.Count} Items", AccentBlue, (s, e) => ShowDashDetail("Process Sales & Cash Transactions (UC19)", _cart)));
+                    pnlDataCards.Controls.Add(CreateDataCard("Cart Total", "$" + _cart.Sum(c => c.SubTotal).ToString("N2"), AccentGreen, (s, e) => ShowDashDetail("Issue Customer Receipt (UC20)", _cart)));
+                    pnlDataCards.Controls.Add(CreateDataCard("Terms & Conditions", "Applied", AccentPurple, (s, e) => ShowDashDetail("Apply & Enforce T&Cs on Sales (UC10)", _cart)));
+                    break;
+                case "Inventory Staff":
+                    pnlDataCards.Controls.Add(CreateDataCard("Stock Items", $"{_allProducts.Count} Items", AccentBlue, (s, e) => ShowDashDetail("Adjust Stock Levels (UC22)", _allProducts)));
+                    pnlDataCards.Controls.Add(CreateDataCard("Low Stock Items", $"{_allProducts.Count(p => p.IsLowStock)} Warning", AccentRed, (s, e) => ShowDashDetail("Track Low Stock (UC24)", _allProducts.Where(p => p.IsLowStock).ToList())));
+                    pnlDataCards.Controls.Add(CreateDataCard("Purchase Orders", $"{_poList.Count} POs", AccentOrange, (s, e) => ShowDashDetail("Create/Receive Purchase Orders (UC16, UC17)", _poList)));
+                    break;
+            }
+        }
+
+        private Panel CreateDataCard(string title, string value, Color stripColor, EventHandler onClick)
+        {
+            Panel card = new Panel { Size = new Size(270, 100), Margin = new Padding(0, 0, 15, 0), BackColor = CardBg, Cursor = Cursors.Hand };
+            Panel strip = new Panel { Size = new Size(5, 100), Dock = DockStyle.Left, BackColor = stripColor };
+
+            Label lblTitle = new Label { Text = title, ForeColor = TextMuted, Font = new Font("Segoe UI", 9, FontStyle.Bold), Location = new Point(18, 15), AutoSize = true };
+            Label lblValue = new Label { Text = value, ForeColor = TextPrimary, Font = new Font("Segoe UI", 16, FontStyle.Bold), Location = new Point(16, 42), AutoSize = true };
+
+            card.Click += onClick;
+            strip.Click += onClick;
+            lblTitle.Click += onClick;
+            lblValue.Click += onClick;
+
+            card.Controls.AddRange(new Control[] { strip, lblTitle, lblValue });
+            return card;
+        }
+
+        private void ShowDashDetail(string context, object dataSource)
+        {
+            lblDashContext.Text = $"📊 BI Report View: {context}";
+            dgvDashboardGrid.DataSource = null;
+            dgvDashboardGrid.DataSource = dataSource;
+            pnlGraphContainer.Invalidate();
+        }
+
+        private void RenderDashboardGraph(object sender, PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.Clear(CardBg);
+
+            using Font titleFont = new Font("Segoe UI", 10, FontStyle.Bold);
+            using Font labelFont = new Font("Segoe UI", 8);
+            using Brush textBrush = new SolidBrush(TextPrimary);
+            using Brush mutedBrush = new SolidBrush(TextMuted);
+
+            g.DrawString($"Business Intelligence Visualizer — [{lblDashContext.Text}]", titleFont, textBrush, 15, 12);
+
+            int startX = 60;
+            int startY = 180;
+            int maxHeight = 120;
+            int barWidth = 45;
+            int spacing = 35;
+
+            // Draw baseline
+            using Pen linePen = new Pen(BorderColor, 2);
+            g.DrawLine(linePen, 40, startY, pnlGraphContainer.Width - 40, startY);
+
+            // Sample graph bars based on available products or report items
+            int count = Math.Min(_allProducts.Count > 0 ? _allProducts.Count : 5, 8);
+            if (count == 0) return;
+
+            decimal maxVal = _allProducts.Max(p => p.QuantityOnHand);
+            if (maxVal <= 0) maxVal = 100;
+
+            for (int i = 0; i < count; i++)
+            {
+                var prod = _allProducts[i];
+                int barHeight = (int)((prod.QuantityOnHand / maxVal) * maxHeight);
+                if (barHeight < 10) barHeight = 10;
+
+                int x = startX + i * (barWidth + spacing);
+                int y = startY - barHeight;
+
+                Color barColor = prod.IsLowStock ? AccentRed : AccentBlue;
+                using Brush barBrush = new SolidBrush(barColor);
+                g.FillRectangle(barBrush, x, y, barWidth, barHeight);
+
+                g.DrawString($"{prod.QuantityOnHand:N0}", labelFont, textBrush, x + 8, y - 18);
+                string shortName = prod.ProductName.Length > 8 ? prod.ProductName.Substring(0, 8) + ".." : prod.ProductName;
+                g.DrawString(shortName, labelFont, mutedBrush, x - 2, startY + 5);
+            }
+        }
+
+        // ==========================================
+        // MODULE 1: MODERN POS / SALES VIEW (WITH PRODUCT SEARCH & RECEIPT)
         // ==========================================
         private void BuildSalesView()
         {
@@ -221,56 +499,105 @@ namespace Hardware.winforms
             dgvCart.ColumnHeadersDefaultCellStyle.ForeColor = TextPrimary;
             dgvCart.DefaultCellStyle.BackColor = CardBg;
             dgvCart.DefaultCellStyle.ForeColor = TextPrimary;
-            dgvCart.DefaultCellStyle.SelectionBackColor = Color.FromArgb(50, 50, 50);
 
             pnlCartCard.Controls.AddRange(new Control[] { lblCartTitle, dgvCart });
 
             Panel pnlCheckoutCard = new Panel
             {
                 Location = new Point(728, 24),
-                Size = new Size(350, 710),
+                Size = new Size(500, 710),
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 BackColor = CardBg
             };
 
-            GroupBox grpAdd = new GroupBox { Text = "Add Item via ID", ForeColor = TextMuted, Font = new Font("Segoe UI", 10), Location = new Point(20, 20), Size = new Size(310, 260) };
+            // POS PRODUCT SEARCH BOX
+            GroupBox grpSearch = new GroupBox { Text = "🔍 Search Item / Product Catalog", ForeColor = TextMuted, Font = new Font("Segoe UI", 10), Location = new Point(20, 15), Size = new Size(460, 220) };
 
-            grpAdd.Controls.Add(new Label { Text = "Product ID:", ForeColor = TextPrimary, Location = new Point(15, 38), AutoSize = true });
-            txtSaleProductId = new TextBox { Location = new Point(115, 35), Width = 175, BackColor = BgDark, ForeColor = TextPrimary };
+            txtSearchPOS = new TextBox { Location = new Point(15, 30), Width = 310, BackColor = BgDark, ForeColor = TextPrimary, Font = new Font("Segoe UI", 10) };
+            Button btnSearchPOS = new Button { Text = "Search", Location = new Point(335, 28), Width = 110, Height = 30, BackColor = AccentBlue, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            btnSearchPOS.FlatAppearance.BorderSize = 0;
+            btnSearchPOS.Click += (s, e) => FilterPOSProducts();
+
+            dgvSearchResults = new DataGridView
+            {
+                Location = new Point(15, 68),
+                Size = new Size(430, 138),
+                ReadOnly = true,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                BackgroundColor = BgDark,
+                ForeColor = TextPrimary,
+                GridColor = BorderColor,
+                BorderStyle = BorderStyle.None,
+                SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+                EnableHeadersVisualStyles = false
+            };
+            dgvSearchResults.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 35, 35);
+            dgvSearchResults.ColumnHeadersDefaultCellStyle.ForeColor = TextPrimary;
+            dgvSearchResults.DefaultCellStyle.BackColor = BgDark;
+            dgvSearchResults.DefaultCellStyle.ForeColor = TextPrimary;
+
+            dgvSearchResults.CellClick += (s, e) =>
+            {
+                if (dgvSearchResults.CurrentRow != null && dgvSearchResults.CurrentRow.DataBoundItem is InventoryViewDto selected)
+                {
+                    txtSaleProductId.Text = selected.ProductId.ToString();
+                    txtUnitPrice.Text = selected.UnitPrice.ToString("F2");
+                }
+            };
+
+            grpSearch.Controls.AddRange(new Control[] { txtSearchPOS, btnSearchPOS, dgvSearchResults });
+
+            GroupBox grpAdd = new GroupBox { Text = "Add Item to Cart", ForeColor = TextMuted, Font = new Font("Segoe UI", 10), Location = new Point(20, 245), Size = new Size(460, 180) };
+
+            grpAdd.Controls.Add(new Label { Text = "Product ID:", ForeColor = TextPrimary, Location = new Point(15, 35), AutoSize = true });
+            txtSaleProductId = new TextBox { Location = new Point(115, 32), Width = 120, BackColor = BgDark, ForeColor = TextPrimary };
             grpAdd.Controls.Add(txtSaleProductId);
 
-            grpAdd.Controls.Add(new Label { Text = "Quantity:", ForeColor = TextPrimary, Location = new Point(15, 82), AutoSize = true });
-            txtSaleQty = new TextBox { Location = new Point(115, 79), Width = 175, Text = "1", BackColor = BgDark, ForeColor = TextPrimary };
+            grpAdd.Controls.Add(new Label { Text = "Quantity:", ForeColor = TextPrimary, Location = new Point(250, 35), AutoSize = true });
+            txtSaleQty = new TextBox { Location = new Point(330, 32), Width = 110, Text = "1", BackColor = BgDark, ForeColor = TextPrimary };
             grpAdd.Controls.Add(txtSaleQty);
 
-            grpAdd.Controls.Add(new Label { Text = "Unit Price:", ForeColor = TextPrimary, Location = new Point(15, 126), AutoSize = true });
-            txtUnitPrice = new TextBox { Location = new Point(115, 123), Width = 175, BackColor = BgDark, ForeColor = TextPrimary };
+            grpAdd.Controls.Add(new Label { Text = "Unit Price ($):", ForeColor = TextPrimary, Location = new Point(15, 80), AutoSize = true });
+            txtUnitPrice = new TextBox { Location = new Point(115, 77), Width = 120, BackColor = BgDark, ForeColor = TextPrimary };
             grpAdd.Controls.Add(txtUnitPrice);
 
-            Button btnAddCart = new Button { Text = "Add to Cart", Location = new Point(15, 180), Width = 275, Height = 42, BackColor = AccentBlue, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            Button btnAddCart = new Button { Text = "➕ Add to Cart", Location = new Point(250, 75), Width = 190, Height = 35, BackColor = AccentBlue, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
             btnAddCart.FlatAppearance.BorderSize = 0;
             btnAddCart.Click += (s, e) => AddToCart();
             grpAdd.Controls.Add(btnAddCart);
 
-            GroupBox grpMeta = new GroupBox { Text = "Transaction Details", ForeColor = TextMuted, Font = new Font("Segoe UI", 10), Location = new Point(20, 295), Size = new Size(310, 150) };
+            GroupBox grpMeta = new GroupBox { Text = "Transaction Info", ForeColor = TextMuted, Font = new Font("Segoe UI", 10), Location = new Point(20, 435), Size = new Size(460, 110) };
 
-            grpMeta.Controls.Add(new Label { Text = "Invoice #:", ForeColor = TextPrimary, Location = new Point(15, 42), AutoSize = true });
-            txtInvoiceNum = new TextBox { Location = new Point(115, 39), Width = 175, Text = "INV-" + DateTime.Now.ToString("fff"), BackColor = BgDark, ForeColor = TextPrimary };
+            grpMeta.Controls.Add(new Label { Text = "Invoice #:", ForeColor = TextPrimary, Location = new Point(15, 35), AutoSize = true });
+            txtInvoiceNum = new TextBox { Location = new Point(100, 32), Width = 140, Text = "INV-" + DateTime.Now.ToString("fff"), BackColor = BgDark, ForeColor = TextPrimary };
             grpMeta.Controls.Add(txtInvoiceNum);
 
-            grpMeta.Controls.Add(new Label { Text = "Cust ID:", ForeColor = TextPrimary, Location = new Point(15, 86), AutoSize = true });
-            txtCustomerId = new TextBox { Location = new Point(115, 83), Width = 175, Text = "1", BackColor = BgDark, ForeColor = TextPrimary };
+            grpMeta.Controls.Add(new Label { Text = "Customer ID:", ForeColor = TextPrimary, Location = new Point(255, 35), AutoSize = true });
+            txtCustomerId = new TextBox { Location = new Point(350, 32), Width = 90, Text = "1", BackColor = BgDark, ForeColor = TextPrimary };
             grpMeta.Controls.Add(txtCustomerId);
 
-            lblTotalAmount = new Label { Text = "Total: $0.00", ForeColor = AccentGreen, Location = new Point(25, 470), Font = new Font("Segoe UI", 18, FontStyle.Bold), AutoSize = true };
+            lblTotalAmount = new Label { Text = "Total Amount: $0.00", ForeColor = AccentGreen, Location = new Point(20, 560), Font = new Font("Segoe UI", 16, FontStyle.Bold), AutoSize = true };
 
-            Button btnCheckout = new Button { Text = "Process Checkout", Location = new Point(20, 530), Width = 310, Height = 55, BackColor = AccentGreen, ForeColor = Color.White, Font = new Font("Segoe UI", 11, FontStyle.Bold), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            Button btnCheckout = new Button { Text = "💳 Complete Sale & Issue Receipt", Location = new Point(20, 610), Width = 460, Height = 55, BackColor = AccentGreen, ForeColor = Color.White, Font = new Font("Segoe UI", 12, FontStyle.Bold), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
             btnCheckout.FlatAppearance.BorderSize = 0;
             btnCheckout.Click += async (s, e) => await CompleteSaleAsync();
 
-            pnlCheckoutCard.Controls.AddRange(new Control[] { grpAdd, grpMeta, lblTotalAmount, btnCheckout });
+            pnlCheckoutCard.Controls.AddRange(new Control[] { grpSearch, grpAdd, grpMeta, lblTotalAmount, btnCheckout });
 
             viewSales.Controls.AddRange(new Control[] { pnlCartCard, pnlCheckoutCard });
+        }
+
+        private void FilterPOSProducts()
+        {
+            string search = txtSearchPOS.Text.Trim().ToLower();
+            if (string.IsNullOrWhiteSpace(search))
+            {
+                dgvSearchResults.DataSource = _allProducts.Take(10).ToList();
+            }
+            else
+            {
+                dgvSearchResults.DataSource = _allProducts.Where(p => p.ProductName.ToLower().Contains(search) || p.ProductCode.ToLower().Contains(search)).ToList();
+            }
         }
 
         // ==========================================
@@ -280,12 +607,12 @@ namespace Hardware.winforms
         {
             viewInventory = new Panel { Padding = new Padding(24) };
 
-            Label lblTitle = new Label { Text = "Inventory & Stock Hub", ForeColor = TextPrimary, Font = new Font("Segoe UI", 14, FontStyle.Bold), AutoSize = true, Location = new Point(24, 24) };
+            Label lblTitle = new Label { Text = "Inventory & Product Control Hub", ForeColor = TextPrimary, Font = new Font("Segoe UI", 14, FontStyle.Bold), AutoSize = true, Location = new Point(24, 24) };
 
             dgvInventory = new DataGridView
             {
                 Location = new Point(24, 70),
-                Size = new Size(1034, 320),
+                Size = new Size(1200, 320),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
                 ReadOnly = true,
                 BackgroundColor = CardBg,
@@ -300,17 +627,15 @@ namespace Hardware.winforms
             dgvInventory.ColumnHeadersDefaultCellStyle.ForeColor = TextPrimary;
             dgvInventory.DefaultCellStyle.BackColor = CardBg;
             dgvInventory.DefaultCellStyle.ForeColor = TextPrimary;
-            dgvInventory.DefaultCellStyle.SelectionBackColor = Color.FromArgb(50, 50, 50);
 
             dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "InventoryId", HeaderText = "Inv ID", Width = 70 });
             dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ProductId", HeaderText = "Prod ID", Width = 70 });
-            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ProductName", HeaderText = "Product Name", Width = 220 });
-            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ProductCode", HeaderText = "Code", Width = 130 });
-            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "UnitPrice", HeaderText = "Unit Price", Width = 110, DefaultCellStyle = { Format = "C2" } });
-            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "QuantityOnHand", HeaderText = "Stock Qty", Width = 100 });
-            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ReorderLevel", HeaderText = "Reorder", Width = 100 });
-            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "IsLowStock", HeaderText = "Low Stock?", Width = 100 });
-            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "LastUpdatedAt", HeaderText = "Last Updated", Width = 150 });
+            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ProductName", HeaderText = "Product Name", Width = 250 });
+            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ProductCode", HeaderText = "Code", Width = 140 });
+            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "UnitPrice", HeaderText = "Unit Price", Width = 120, DefaultCellStyle = { Format = "C2" } });
+            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "QuantityOnHand", HeaderText = "Stock Qty", Width = 110 });
+            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ReorderLevel", HeaderText = "Reorder", Width = 110 });
+            dgvInventory.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "IsLowStock", HeaderText = "Low Stock?", Width = 110 });
 
             dgvInventory.CellClick += (s, e) =>
             {
@@ -327,11 +652,11 @@ namespace Hardware.winforms
 
             GroupBox grpManage = new GroupBox
             {
-                Text = "Product Management",
+                Text = "Product & Stock Actions (Confirmation Dialogs Implemented)",
                 ForeColor = TextMuted,
                 Font = new Font("Segoe UI", 10),
                 Location = new Point(24, 410),
-                Size = new Size(1034, 210),
+                Size = new Size(1200, 210),
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
             };
 
@@ -360,14 +685,14 @@ namespace Hardware.winforms
             btnUpdateProd.FlatAppearance.BorderSize = 0;
             btnUpdateProd.Click += async (s, e) => await UpdateProductAsync();
 
-            Button btnDeleteProd = new Button { Text = "Delete", Location = new Point(305, 95), Width = 130, Height = 42, BackColor = Color.FromArgb(239, 68, 68), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            Button btnDeleteProd = new Button { Text = "Delete", Location = new Point(305, 95), Width = 130, Height = 42, BackColor = AccentRed, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
             btnDeleteProd.FlatAppearance.BorderSize = 0;
             btnDeleteProd.Click += async (s, e) => await DeleteProductAsync();
 
-            Panel pnlStock = new Panel { Location = new Point(460, 90), Size = new Size(545, 52), BackColor = BgDark };
+            Panel pnlStock = new Panel { Location = new Point(460, 90), Size = new Size(680, 52), BackColor = BgDark };
             pnlStock.Controls.Add(new Label { Text = "Stock Adjust (+/-):", ForeColor = TextPrimary, Location = new Point(15, 16), AutoSize = true });
             txtAdjustQty = new TextBox { Location = new Point(150, 13), Width = 80, Text = "0", BackColor = CardBg, ForeColor = TextPrimary };
-            Button btnAdjust = new Button { Text = "Apply Stock Change", Location = new Point(245, 11), Width = 280, Height = 32, BackColor = Color.FromArgb(217, 119, 6), ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            Button btnAdjust = new Button { Text = "Apply Stock Change", Location = new Point(245, 11), Width = 280, Height = 32, BackColor = AccentOrange, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
             btnAdjust.FlatAppearance.BorderSize = 0;
             btnAdjust.Click += async (s, e) => await AdjustStockAsync();
             pnlStock.Controls.AddRange(new Control[] { txtAdjustQty, btnAdjust });
@@ -377,28 +702,164 @@ namespace Hardware.winforms
         }
 
         // ==========================================
-        // MODULE 3: TRANSACTION HISTORY & ANALYTICS
+        // MODULE 3: PAYROLL MODULE (UC14, UC15 FOR HR MANAGER)
+        // ==========================================
+        private void BuildPayrollView()
+        {
+            viewPayroll = new Panel { Padding = new Padding(24) };
+
+            Label lblTitle = new Label { Text = "HR & Employee Payroll Hub (UC14, UC15)", ForeColor = TextPrimary, Font = new Font("Segoe UI", 14, FontStyle.Bold), AutoSize = true, Location = new Point(24, 24) };
+
+            dgvPayroll = new DataGridView
+            {
+                Location = new Point(24, 70),
+                Size = new Size(1200, 320),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                ReadOnly = true,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                BackgroundColor = CardBg,
+                ForeColor = TextPrimary,
+                GridColor = BorderColor,
+                BorderStyle = BorderStyle.None,
+                EnableHeadersVisualStyles = false
+            };
+            dgvPayroll.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 35, 35);
+            dgvPayroll.ColumnHeadersDefaultCellStyle.ForeColor = TextPrimary;
+            dgvPayroll.DefaultCellStyle.BackColor = CardBg;
+            dgvPayroll.DefaultCellStyle.ForeColor = TextPrimary;
+
+            GroupBox grpAddPayroll = new GroupBox { Text = "Process / Release Employee Payroll", ForeColor = TextMuted, Font = new Font("Segoe UI", 10), Location = new Point(24, 410), Size = new Size(1200, 210) };
+
+            grpAddPayroll.Controls.Add(new Label { Text = "Emp Name:", ForeColor = TextPrimary, Location = new Point(20, 35), AutoSize = true });
+            txtEmpName = new TextBox { Location = new Point(110, 32), Width = 180, BackColor = BgDark, ForeColor = TextPrimary };
+
+            grpAddPayroll.Controls.Add(new Label { Text = "Role:", ForeColor = TextPrimary, Location = new Point(310, 35), AutoSize = true });
+            txtEmpRole = new TextBox { Location = new Point(360, 32), Width = 140, Text = "Staff", BackColor = BgDark, ForeColor = TextPrimary };
+
+            grpAddPayroll.Controls.Add(new Label { Text = "Base Salary ($):", ForeColor = TextPrimary, Location = new Point(520, 35), AutoSize = true });
+            txtBaseSalary = new TextBox { Location = new Point(630, 32), Width = 110, Text = "3000.00", BackColor = BgDark, ForeColor = TextPrimary };
+
+            grpAddPayroll.Controls.Add(new Label { Text = "Bonuses ($):", ForeColor = TextPrimary, Location = new Point(760, 35), AutoSize = true });
+            txtBonus = new TextBox { Location = new Point(850, 32), Width = 90, Text = "200.00", BackColor = BgDark, ForeColor = TextPrimary };
+
+            grpAddPayroll.Controls.Add(new Label { Text = "Deductions ($):", ForeColor = TextPrimary, Location = new Point(960, 35), AutoSize = true });
+            txtDeductions = new TextBox { Location = new Point(1070, 32), Width = 90, Text = "150.00", BackColor = BgDark, ForeColor = TextPrimary };
+
+            grpAddPayroll.Controls.AddRange(new Control[] { txtEmpName, txtEmpRole, txtBaseSalary, txtBonus, txtDeductions });
+
+            Button btnProcessPayroll = new Button { Text = "⚡ Process & Save Payroll Record", Location = new Point(20, 95), Width = 300, Height = 42, BackColor = AccentPurple, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            btnProcessPayroll.FlatAppearance.BorderSize = 0;
+            btnProcessPayroll.Click += async (s, e) => await ProcessPayrollAsync();
+
+            Button btnApprovePayroll = new Button { Text = "✅ Approve & Pay Selected Record", Location = new Point(340, 95), Width = 300, Height = 42, BackColor = AccentGreen, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            btnApprovePayroll.FlatAppearance.BorderSize = 0;
+            btnApprovePayroll.Click += async (s, e) => await ApprovePayrollAsync();
+
+            grpAddPayroll.Controls.AddRange(new Control[] { btnProcessPayroll, btnApprovePayroll });
+
+            viewPayroll.Controls.AddRange(new Control[] { lblTitle, dgvPayroll, grpAddPayroll });
+        }
+
+        // ==========================================
+        // MODULE 4: SUPPLIER ORDERS & BUYING MODULE (UC16, UC17, UC18, UC7)
+        // ==========================================
+        private void BuildSupplierOrdersView()
+        {
+            viewSupplierOrders = new Panel { Padding = new Padding(24) };
+
+            Label lblTitle = new Label { Text = "Supplier Orders & Purchasing Hub (UC7, UC16, UC17, UC18)", ForeColor = TextPrimary, Font = new Font("Segoe UI", 14, FontStyle.Bold), AutoSize = true, Location = new Point(24, 24) };
+
+            dgvSupplierOrders = new DataGridView
+            {
+                Location = new Point(24, 70),
+                Size = new Size(1200, 320),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                ReadOnly = true,
+                AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+                BackgroundColor = CardBg,
+                ForeColor = TextPrimary,
+                GridColor = BorderColor,
+                BorderStyle = BorderStyle.None,
+                EnableHeadersVisualStyles = false
+            };
+            dgvSupplierOrders.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 35, 35);
+            dgvSupplierOrders.ColumnHeadersDefaultCellStyle.ForeColor = TextPrimary;
+            dgvSupplierOrders.DefaultCellStyle.BackColor = CardBg;
+            dgvSupplierOrders.DefaultCellStyle.ForeColor = TextPrimary;
+
+            GroupBox grpPO = new GroupBox { Text = "Create & Manage Supplier Purchase Orders", ForeColor = TextMuted, Font = new Font("Segoe UI", 10), Location = new Point(24, 410), Size = new Size(1200, 210) };
+
+            grpPO.Controls.Add(new Label { Text = "Supplier Name:", ForeColor = TextPrimary, Location = new Point(20, 35), AutoSize = true });
+            cbSuppliers = new ComboBox { Location = new Point(130, 32), Width = 220, BackColor = BgDark, ForeColor = TextPrimary, DropDownStyle = ComboBoxStyle.DropDownList };
+            cbSuppliers.Items.AddRange(new object[] { "Apex Hardware Wholesale", "BuildRight Supply Corp", "Master Fasteners Ltd" });
+            cbSuppliers.SelectedIndex = 0;
+            grpPO.Controls.Add(cbSuppliers);
+
+            grpPO.Controls.Add(new Label { Text = "Product ID:", ForeColor = TextPrimary, Location = new Point(370, 35), AutoSize = true });
+            txtPoProdId = new TextBox { Location = new Point(450, 32), Width = 90, Text = "1", BackColor = BgDark, ForeColor = TextPrimary };
+            grpPO.Controls.Add(txtPoProdId);
+
+            grpPO.Controls.Add(new Label { Text = "Order Qty:", ForeColor = TextPrimary, Location = new Point(560, 35), AutoSize = true });
+            txtPoQty = new TextBox { Location = new Point(640, 32), Width = 90, Text = "50", BackColor = BgDark, ForeColor = TextPrimary };
+            grpPO.Controls.Add(txtPoQty);
+
+            grpPO.Controls.Add(new Label { Text = "Unit Cost ($):", ForeColor = TextPrimary, Location = new Point(750, 35), AutoSize = true });
+            txtPoCost = new TextBox { Location = new Point(840, 32), Width = 90, Text = "12.50", BackColor = BgDark, ForeColor = TextPrimary };
+            grpPO.Controls.Add(txtPoCost);
+
+            Button btnCreatePO = new Button { Text = "📝 Create PO (UC16)", Location = new Point(20, 95), Width = 220, Height = 42, BackColor = AccentBlue, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            btnCreatePO.FlatAppearance.BorderSize = 0;
+            btnCreatePO.Click += async (s, e) => await CreatePOAsync();
+
+            Button btnValidatePO = new Button { Text = "🔍 Validate PO (UC18)", Location = new Point(255, 95), Width = 220, Height = 42, BackColor = AccentOrange, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            btnValidatePO.FlatAppearance.BorderSize = 0;
+            btnValidatePO.Click += async (s, e) => await ChangePOStatusAsync("Validated");
+
+            Button btnApproveFunds = new Button { Text = "💰 Approve PO Funds (UC7)", Location = new Point(490, 95), Width = 240, Height = 42, BackColor = AccentGreen, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            btnApproveFunds.FlatAppearance.BorderSize = 0;
+            btnApproveFunds.Click += async (s, e) => await ChangePOStatusAsync("Funds Approved");
+
+            Button btnReceiveDelivery = new Button { Text = "📦 Receive Delivery (UC17)", Location = new Point(745, 95), Width = 240, Height = 42, BackColor = AccentPurple, ForeColor = Color.White, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            btnReceiveDelivery.FlatAppearance.BorderSize = 0;
+            btnReceiveDelivery.Click += async (s, e) => await ChangePOStatusAsync("Received");
+
+            grpPO.Controls.AddRange(new Control[] { btnCreatePO, btnValidatePO, btnApproveFunds, btnReceiveDelivery });
+
+            viewSupplierOrders.Controls.AddRange(new Control[] { lblTitle, dgvSupplierOrders, grpPO });
+        }
+
+        // ==========================================
+        // MODULE 5: TRANSACTION HISTORY & ANALYTICS REPORTS
         // ==========================================
         private void BuildReportsView()
         {
             viewReports = new Panel { Padding = new Padding(24) };
 
-            Label lblTitle = new Label { Text = "Transaction History & Analytics", ForeColor = TextPrimary, Font = new Font("Segoe UI", 14, FontStyle.Bold), AutoSize = true, Location = new Point(24, 24) };
+            Label lblTitle = new Label { Text = "Transaction History & Analytics Reports", ForeColor = TextPrimary, Font = new Font("Segoe UI", 14, FontStyle.Bold), AutoSize = true, Location = new Point(24, 24) };
 
-            Button btnRefresh = new Button { Text = "🔄 Refresh", Location = new Point(918, 20), Size = new Size(140, 38), BackColor = CardBg, ForeColor = TextPrimary, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Anchor = AnchorStyles.Top | AnchorStyles.Right };
+            Button btnRefresh = new Button { Text = "🔄 Refresh Data", Location = new Point(1080, 20), Size = new Size(140, 38), BackColor = CardBg, ForeColor = TextPrimary, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand, Anchor = AnchorStyles.Top | AnchorStyles.Right };
             btnRefresh.FlatAppearance.BorderColor = BorderColor;
             btnRefresh.Click += async (s, e) => await LoadReportsAsync();
 
-            Panel cardRevenue = CreateDataCard("Total Revenue", out lblRevenueValue, new Point(24, 75), AccentBlue, (s, e) => LoadReportContext("Revenue & Sales Summary"));
-            Panel cardTrans = CreateDataCard("Total Transactions", out lblTransValue, new Point(360, 75), AccentGreen, (s, e) => LoadReportContext("Transaction Logs"));
-            Panel cardTopProd = CreateDataCard("Top Catalog Items", out lblTopProdValue, new Point(696, 75), Color.FromArgb(217, 119, 6), (s, e) => LoadReportContext("Top Selling Products"));
+            Panel cardRevenue = CreateDataCard("Total Sales Revenue", out lblRevenueValue, new Point(24, 75), AccentBlue, (s, e) => LoadReportContext("Revenue & Sales Summary"));
+            Panel cardTrans = CreateDataCard("Completed Transactions", out lblTransValue, new Point(360, 75), AccentGreen, (s, e) => LoadReportContext("Transaction Logs"));
+            Panel cardTopProd = CreateDataCard("Top Selling Catalog Items", out lblTopProdValue, new Point(696, 75), AccentOrange, (s, e) => LoadReportContext("Top Selling Products"));
 
-            lblReportContext = new Label { Text = "Detailed View: Top Selling Products", ForeColor = TextMuted, Font = new Font("Segoe UI", 11, FontStyle.Italic), AutoSize = true, Location = new Point(24, 205) };
+            lblReportContext = new Label { Text = "Detailed View: Top Selling Products", ForeColor = TextMuted, Font = new Font("Segoe UI", 11, FontStyle.Italic), AutoSize = true, Location = new Point(24, 200) };
+
+            pnlReportChart = new Panel
+            {
+                Location = new Point(24, 230),
+                Size = new Size(1200, 180),
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                BackColor = CardBg
+            };
+            pnlReportChart.Paint += RenderReportChart;
 
             dgvReportDetails = new DataGridView
             {
-                Location = new Point(24, 240),
-                Size = new Size(1034, 490),
+                Location = new Point(24, 425),
+                Size = new Size(1200, 300),
                 Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right,
                 ReadOnly = true,
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
@@ -413,16 +874,16 @@ namespace Hardware.winforms
             dgvReportDetails.DefaultCellStyle.BackColor = CardBg;
             dgvReportDetails.DefaultCellStyle.ForeColor = TextPrimary;
 
-            viewReports.Controls.AddRange(new Control[] { lblTitle, btnRefresh, cardRevenue, cardTrans, cardTopProd, lblReportContext, dgvReportDetails });
+            viewReports.Controls.AddRange(new Control[] { lblTitle, btnRefresh, cardRevenue, cardTrans, cardTopProd, lblReportContext, pnlReportChart, dgvReportDetails });
         }
 
         private Panel CreateDataCard(string title, out Label valLabel, Point loc, Color stripColor, EventHandler onClick)
         {
-            Panel card = new Panel { Size = new Size(312, 110), Location = loc, BackColor = CardBg, Cursor = Cursors.Hand };
-            Panel strip = new Panel { Size = new Size(4, 110), Dock = DockStyle.Left, BackColor = stripColor };
+            Panel card = new Panel { Size = new Size(312, 105), Location = loc, BackColor = CardBg, Cursor = Cursors.Hand };
+            Panel strip = new Panel { Size = new Size(4, 105), Dock = DockStyle.Left, BackColor = stripColor };
 
             Label lblTitle = new Label { Text = title, ForeColor = TextMuted, Font = new Font("Segoe UI", 10), Location = new Point(20, 18), AutoSize = true };
-            valLabel = new Label { Text = "-", ForeColor = TextPrimary, Font = new Font("Segoe UI", 20, FontStyle.Bold), Location = new Point(18, 48), AutoSize = true };
+            valLabel = new Label { Text = "-", ForeColor = TextPrimary, Font = new Font("Segoe UI", 18, FontStyle.Bold), Location = new Point(18, 48), AutoSize = true };
 
             card.Click += onClick;
             strip.Click += onClick;
@@ -440,21 +901,72 @@ namespace Hardware.winforms
 
             dgvReportDetails.DataSource = null;
             dgvReportDetails.DataSource = _currentReport.TopSellingProducts;
+            pnlReportChart.Invalidate();
+        }
+
+        private void RenderReportChart(object sender, PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.Clear(CardBg);
+
+            using Font titleFont = new Font("Segoe UI", 10, FontStyle.Bold);
+            using Font labelFont = new Font("Segoe UI", 8);
+            using Brush textBrush = new SolidBrush(TextPrimary);
+            using Brush mutedBrush = new SolidBrush(TextMuted);
+
+            g.DrawString($"Graph Visualizer — {_userRole} Revenue & Sales Analysis", titleFont, textBrush, 15, 12);
+
+            if (_currentReport == null || !_currentReport.TopSellingProducts.Any()) return;
+
+            int startX = 70;
+            int startY = 140;
+            int maxHeight = 90;
+            int barWidth = 55;
+            int spacing = 45;
+
+            using Pen linePen = new Pen(BorderColor, 2);
+            g.DrawLine(linePen, 40, startY, pnlReportChart.Width - 40, startY);
+
+            decimal maxRev = _currentReport.TopSellingProducts.Max(p => p.TotalRevenue);
+            if (maxRev <= 0) maxRev = 100;
+
+            for (int i = 0; i < _currentReport.TopSellingProducts.Count; i++)
+            {
+                var item = _currentReport.TopSellingProducts[i];
+                int barHeight = (int)((item.TotalRevenue / maxRev) * maxHeight);
+                if (barHeight < 10) barHeight = 10;
+
+                int x = startX + i * (barWidth + spacing);
+                int y = startY - barHeight;
+
+                using Brush barBrush = new SolidBrush(AccentGreen);
+                g.FillRectangle(barBrush, x, y, barWidth, barHeight);
+
+                g.DrawString($"${item.TotalRevenue:N0}", labelFont, textBrush, x, y - 18);
+                string shortName = item.ProductName.Length > 9 ? item.ProductName.Substring(0, 9) + ".." : item.ProductName;
+                g.DrawString(shortName, labelFont, mutedBrush, x - 2, startY + 5);
+            }
         }
 
         // ==========================================
-        // API CALLS & LOGIC HANDLERS
+        // API CALLS & ACTION HANDLERS WITH CONFIRMATION DIALOGS
         // ==========================================
+
         private async Task CreateProductAsync()
         {
             if (string.IsNullOrWhiteSpace(txtProdCode.Text) || string.IsNullOrWhiteSpace(txtProdName.Text) || !decimal.TryParse(txtProdPrice.Text, out decimal price))
             {
-                MessageBox.Show("Please enter valid product details.", "Validation Error"); return;
+                MessageBox.Show("Please enter valid product code, name, and price.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
+
+            var confirm = MessageBox.Show($"Are you sure you want to add product '{txtProdName.Text}' (${price:F2}) to catalog?", "Confirm New Product", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (confirm != DialogResult.Yes) return;
+
             var response = await _httpClient.PostAsJsonAsync($"tenant/{_currentCompanyId}/products", new { productCode = txtProdCode.Text.Trim(), productName = txtProdName.Text.Trim(), unitPrice = price, isActive = true });
             if (response.IsSuccessStatusCode)
             {
-                MessageBox.Show("Product created successfully!");
+                MessageBox.Show("Product created successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 txtProdCode.Clear(); txtProdName.Clear(); txtProdPrice.Clear();
                 await LoadInventoryAsync();
             }
@@ -464,16 +976,20 @@ namespace Hardware.winforms
         {
             if (string.IsNullOrWhiteSpace(txtAdjustProductId.Text) || !int.TryParse(txtAdjustProductId.Text, out int prodId))
             {
-                MessageBox.Show("Please select a product from the grid first.", "Notice"); return;
+                MessageBox.Show("Please select a product from the inventory table first.", "Notice", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
             }
             if (!decimal.TryParse(txtProdPrice.Text, out decimal price) || !decimal.TryParse(txtAdjustReorder.Text, out decimal reorder)) return;
+
+            var confirm = MessageBox.Show($"Are you sure you want to update Product ID #{prodId}?", "Confirm Update", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (confirm != DialogResult.Yes) return;
 
             var response = await _httpClient.PutAsJsonAsync($"tenant/{_currentCompanyId}/products/{prodId}?reorderLevel={reorder}",
                 new { productCode = txtProdCode.Text.Trim(), productName = txtProdName.Text.Trim(), unitPrice = price });
 
             if (response.IsSuccessStatusCode)
             {
-                MessageBox.Show("Product updated successfully!");
+                MessageBox.Show("Product updated successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 await LoadInventoryAsync();
             }
         }
@@ -482,18 +998,19 @@ namespace Hardware.winforms
         {
             if (string.IsNullOrWhiteSpace(txtAdjustProductId.Text) || !int.TryParse(txtAdjustProductId.Text, out int prodId))
             {
-                MessageBox.Show("Please select a product from the grid first.", "Notice"); return;
+                MessageBox.Show("Please select a product from the inventory table first.", "Notice", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
             }
 
-            if (MessageBox.Show("Are you sure you want to delete this product?", "Confirm Delete", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+            var confirm = MessageBox.Show($"⚠️ ARE YOU SURE YOU WANT TO DELETE PRODUCT #{prodId}?\nThis action cannot be undone.", "Confirm Delete Product", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+            if (confirm != DialogResult.Yes) return;
+
+            var response = await _httpClient.DeleteAsync($"tenant/{_currentCompanyId}/products/{prodId}");
+            if (response.IsSuccessStatusCode)
             {
-                var response = await _httpClient.DeleteAsync($"tenant/{_currentCompanyId}/products/{prodId}");
-                if (response.IsSuccessStatusCode)
-                {
-                    MessageBox.Show("Product deleted.");
-                    txtProdCode.Clear(); txtProdName.Clear(); txtProdPrice.Clear(); txtAdjustProductId.Clear();
-                    await LoadInventoryAsync();
-                }
+                MessageBox.Show("Product deleted from catalog.", "Deleted", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                txtProdCode.Clear(); txtProdName.Clear(); txtProdPrice.Clear(); txtAdjustProductId.Clear();
+                await LoadInventoryAsync();
             }
         }
 
@@ -501,12 +1018,17 @@ namespace Hardware.winforms
         {
             if (!int.TryParse(txtAdjustProductId.Text, out int prodId) || !decimal.TryParse(txtAdjustQty.Text, out decimal qty) || !decimal.TryParse(txtAdjustReorder.Text, out decimal reorder))
             {
-                MessageBox.Show("Please select a product and enter valid inventory values.", "Validation Error"); return;
+                MessageBox.Show("Please select a product and enter a valid quantity change.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
+
+            var confirm = MessageBox.Show($"Adjust stock quantity by {qty} for Product #{prodId}?", "Confirm Stock Adjustment", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (confirm != DialogResult.Yes) return;
+
             var response = await _httpClient.PostAsync($"tenant/{_currentCompanyId}/inventory/adjust?productId={prodId}&quantity={qty}&reorderLevel={reorder}", null);
             if (response.IsSuccessStatusCode)
             {
-                MessageBox.Show("Stock adjusted successfully!");
+                MessageBox.Show("Stock adjusted successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 txtAdjustQty.Text = "0";
                 await LoadInventoryAsync();
             }
@@ -516,8 +1038,10 @@ namespace Hardware.winforms
         {
             try
             {
-                var inventory = await _httpClient.GetFromJsonAsync<List<InventoryViewDto>>($"tenant/{_currentCompanyId}/inventory");
-                dgvInventory.DataSource = inventory;
+                _allProducts = await _httpClient.GetFromJsonAsync<List<InventoryViewDto>>($"tenant/{_currentCompanyId}/inventory") ?? new List<InventoryViewDto>();
+                dgvInventory.DataSource = _allProducts;
+                dgvSearchResults.DataSource = _allProducts.Take(10).ToList();
+                LoadDashboardRoleCards();
             }
             catch { }
         }
@@ -526,17 +1050,31 @@ namespace Hardware.winforms
         {
             if (!int.TryParse(txtSaleProductId.Text, out int prodId) || !decimal.TryParse(txtSaleQty.Text, out decimal qty) || !decimal.TryParse(txtUnitPrice.Text, out decimal price))
             {
-                MessageBox.Show("Please enter valid numeric sale items.", "Validation Error"); return;
+                MessageBox.Show("Please select or enter valid Product ID, Quantity, and Price.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
-            _cart.Add(new CartItemDto { ProductId = prodId, Quantity = qty, UnitPrice = price, SubTotal = qty * price });
+
+            var prodName = _allProducts.FirstOrDefault(p => p.ProductId == prodId)?.ProductName ?? $"Product #{prodId}";
+
+            _cart.Add(new CartItemDto { ProductId = prodId, ProductName = prodName, Quantity = qty, UnitPrice = price, SubTotal = qty * price });
             dgvCart.DataSource = null;
             dgvCart.DataSource = _cart;
-            lblTotalAmount.Text = $"Total: ${_cart.Sum(x => x.SubTotal):F2}";
+            lblTotalAmount.Text = $"Total Amount: ${_cart.Sum(x => x.SubTotal):F2}";
+            LoadDashboardRoleCards();
         }
 
         private async Task CompleteSaleAsync()
         {
-            if (!_cart.Any()) return;
+            if (!_cart.Any())
+            {
+                MessageBox.Show("Cart is empty! Add items before checkout.", "Empty Cart", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var total = _cart.Sum(x => x.SubTotal);
+            var confirm = MessageBox.Show($"Process Checkout for ${_cart.Count} items? Total Amount: ${total:F2}", "Confirm Sale Checkout", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (confirm != DialogResult.Yes) return;
+
             int.TryParse(txtCustomerId.Text, out int customerId);
 
             var salePayload = new SaleRequestDto
@@ -549,16 +1087,211 @@ namespace Hardware.winforms
             var response = await _httpClient.PostAsJsonAsync($"tenant/{_currentCompanyId}/sales", salePayload);
             if (response.IsSuccessStatusCode)
             {
-                MessageBox.Show("Sale processed and committed to database successfully!", "Success");
-                _cart.Clear(); dgvCart.DataSource = null;
-                lblTotalAmount.Text = "Total: $0.00";
+                // SHOW CUSTOMER RECEIPT MODAL DIALOG
+                ShowReceiptModal(salePayload.InvoiceNumber, total);
+
+                _cart.Clear();
+                dgvCart.DataSource = null;
+                lblTotalAmount.Text = "Total Amount: $0.00";
                 txtInvoiceNum.Text = "INV-" + DateTime.Now.ToString("fff");
                 await RefreshAllDataAsync();
             }
             else
             {
-                MessageBox.Show($"Transaction failed: {await response.Content.ReadAsStringAsync()}", "Error");
+                MessageBox.Show($"Transaction failed: {await response.Content.ReadAsStringAsync()}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void ShowReceiptModal(string invoiceNum, decimal totalAmount)
+        {
+            Form dlgReceipt = new Form
+            {
+                Text = "🧾 Official Customer Receipt (UC20)",
+                Size = new Size(420, 560),
+                StartPosition = FormStartPosition.CenterParent,
+                BackColor = Color.FromArgb(28, 28, 28),
+                FormBorderStyle = FormBorderStyle.FixedDialog,
+                MaximizeBox = false
+            };
+
+            Label lblHeader = new Label
+            {
+                Text = $"⚡ TENANT {_currentCompanyId} HARDWARE STORE\nOFFICIAL RECEIPT",
+                Font = new Font("Segoe UI", 12, FontStyle.Bold),
+                ForeColor = AccentGreen,
+                TextAlign = ContentAlignment.TopCenter,
+                Dock = DockStyle.Top,
+                Height = 60
+            };
+
+            RichTextBox rtbReceipt = new RichTextBox
+            {
+                Location = new Point(20, 70),
+                Size = new Size(365, 380),
+                BackColor = Color.FromArgb(18, 18, 18),
+                ForeColor = TextPrimary,
+                Font = new Font("Consolas", 10),
+                ReadOnly = true,
+                BorderStyle = BorderStyle.None
+            };
+
+            rtbReceipt.AppendText($"Invoice #: {invoiceNum}\n");
+            rtbReceipt.AppendText($"Date: {DateTime.Now:yyyy-MM-dd HH:mm}\n");
+            rtbReceipt.AppendText($"Cashier: {_userRole}\n");
+            rtbReceipt.AppendText("----------------------------------------\n");
+            rtbReceipt.AppendText(string.Format("{0,-18} {1,5} {2,12}\n", "Item Name", "Qty", "Subtotal"));
+            rtbReceipt.AppendText("----------------------------------------\n");
+
+            foreach (var item in _cart)
+            {
+                string name = item.ProductName.Length > 18 ? item.ProductName.Substring(0, 18) : item.ProductName;
+                rtbReceipt.AppendText(string.Format("{0,-18} {1,5} ${2,11:F2}\n", name, item.Quantity, item.SubTotal));
+            }
+
+            rtbReceipt.AppendText("----------------------------------------\n");
+            rtbReceipt.AppendText($"GRAND TOTAL: ${totalAmount:F2}\n");
+            rtbReceipt.AppendText("========================================\n");
+            rtbReceipt.AppendText("   Thank you for your purchase!   \n");
+
+            Button btnClose = new Button
+            {
+                Text = "Close Receipt",
+                Location = new Point(20, 465),
+                Size = new Size(365, 40),
+                BackColor = AccentBlue,
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Font = new Font("Segoe UI", 10, FontStyle.Bold),
+                Cursor = Cursors.Hand
+            };
+            btnClose.FlatAppearance.BorderSize = 0;
+            btnClose.Click += (s, e) => dlgReceipt.Close();
+
+            dlgReceipt.Controls.AddRange(new Control[] { lblHeader, rtbReceipt, btnClose });
+            dlgReceipt.ShowDialog();
+        }
+
+        private async Task ProcessPayrollAsync()
+        {
+            if (string.IsNullOrWhiteSpace(txtEmpName.Text) || !decimal.TryParse(txtBaseSalary.Text, out decimal baseSal))
+            {
+                MessageBox.Show("Please enter employee name and valid base salary.", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            decimal.TryParse(txtBonus.Text, out decimal bonus);
+            decimal.TryParse(txtDeductions.Text, out decimal ded);
+
+            var confirm = MessageBox.Show($"Process Payroll record for '{txtEmpName.Text}'?\nBase: ${baseSal:F2}, Net Pay: ${(baseSal + bonus - ded):F2}", "Confirm Payroll", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (confirm != DialogResult.Yes) return;
+
+            var rec = new PayrollRecordDto
+            {
+                EmployeeId = new Random().Next(100, 999),
+                EmployeeName = txtEmpName.Text.Trim(),
+                Role = txtEmpRole.Text.Trim(),
+                BaseSalary = baseSal,
+                Bonuses = bonus,
+                Deductions = ded,
+                PayPeriod = DateTime.Now.ToString("yyyy-MM")
+            };
+
+            var response = await _httpClient.PostAsJsonAsync($"tenant/{_currentCompanyId}/payroll/process", rec);
+            if (response.IsSuccessStatusCode)
+            {
+                MessageBox.Show("Payroll record processed successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                await LoadPayrollAsync();
+            }
+        }
+
+        private async Task ApprovePayrollAsync()
+        {
+            if (dgvPayroll.CurrentRow == null || !(dgvPayroll.CurrentRow.DataBoundItem is PayrollRecordDto sel))
+            {
+                MessageBox.Show("Select a payroll record from the list first.", "Notice", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var confirm = MessageBox.Show($"Approve and issue payment of ${sel.NetPay:F2} for {sel.EmployeeName}?", "Confirm Payroll Payment", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (confirm != DialogResult.Yes) return;
+
+            var response = await _httpClient.PutAsync($"tenant/{_currentCompanyId}/payroll/{sel.PayrollId}/approve", null);
+            if (response.IsSuccessStatusCode)
+            {
+                MessageBox.Show("Payroll payment approved and disbursed!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                await LoadPayrollAsync();
+            }
+        }
+
+        private async Task LoadPayrollAsync()
+        {
+            try
+            {
+                _payrollList = await _httpClient.GetFromJsonAsync<List<PayrollRecordDto>>($"tenant/{_currentCompanyId}/payroll") ?? new List<PayrollRecordDto>();
+                dgvPayroll.DataSource = _payrollList;
+                LoadDashboardRoleCards();
+            }
+            catch { }
+        }
+
+        private async Task CreatePOAsync()
+        {
+            if (!int.TryParse(txtPoProdId.Text, out int prodId) || !decimal.TryParse(txtPoQty.Text, out decimal qty) || !decimal.TryParse(txtPoCost.Text, out decimal cost))
+            {
+                MessageBox.Show("Please enter valid PO details (Product ID, Qty, Cost).", "Validation Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var suppName = cbSuppliers.SelectedItem?.ToString() ?? "Supplier";
+            var confirm = MessageBox.Show($"Create Purchase Order to '{suppName}' for {qty} units?", "Confirm PO Creation", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (confirm != DialogResult.Yes) return;
+
+            var prodName = _allProducts.FirstOrDefault(p => p.ProductId == prodId)?.ProductName ?? $"Product #{prodId}";
+
+            var po = new PurchaseOrderDto
+            {
+                SupplierId = cbSuppliers.SelectedIndex + 1,
+                SupplierName = suppName,
+                Items = new List<PurchaseOrderItemDto> { new PurchaseOrderItemDto { ProductId = prodId, ProductName = prodName, Quantity = qty, UnitCost = cost } }
+            };
+
+            var response = await _httpClient.PostAsJsonAsync($"tenant/{_currentCompanyId}/purchase-orders", po);
+            if (response.IsSuccessStatusCode)
+            {
+                MessageBox.Show("Purchase Order created in Draft state!", "PO Created", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                await LoadPurchaseOrdersAsync();
+            }
+        }
+
+        private async Task ChangePOStatusAsync(string targetStatus)
+        {
+            if (dgvSupplierOrders.CurrentRow == null || !(dgvSupplierOrders.CurrentRow.DataBoundItem is PurchaseOrderDto sel))
+            {
+                MessageBox.Show("Select a Purchase Order from the table first.", "Notice", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            var confirm = MessageBox.Show($"Transition Purchase Order #{sel.OrderNumber} status to '{targetStatus}'?", "Confirm PO Action", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (confirm != DialogResult.Yes) return;
+
+            var response = await _httpClient.PutAsync($"tenant/{_currentCompanyId}/purchase-orders/{sel.PurchaseOrderId}/status?status={targetStatus}", null);
+            if (response.IsSuccessStatusCode)
+            {
+                MessageBox.Show($"Purchase Order status updated to '{targetStatus}'!", "Updated", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                await LoadPurchaseOrdersAsync();
+                await LoadInventoryAsync();
+            }
+        }
+
+        private async Task LoadPurchaseOrdersAsync()
+        {
+            try
+            {
+                _poList = await _httpClient.GetFromJsonAsync<List<PurchaseOrderDto>>($"tenant/{_currentCompanyId}/purchase-orders") ?? new List<PurchaseOrderDto>();
+                dgvSupplierOrders.DataSource = _poList;
+                LoadDashboardRoleCards();
+            }
+            catch { }
         }
 
         private async Task LoadReportsAsync()
@@ -568,7 +1301,7 @@ namespace Hardware.winforms
                 _currentReport = await _httpClient.GetFromJsonAsync<SalesSummaryReportDto>($"tenant/{_currentCompanyId}/reports/sales-summary");
                 if (_currentReport != null)
                 {
-                    lblRevenueValue.Text = $"${_currentReport.TotalRevenue:F2}";
+                    lblRevenueValue.Text = $"${_currentReport.TotalRevenue:N2}";
                     lblTransValue.Text = $"{_currentReport.TotalTransactions}";
                     lblTopProdValue.Text = $"{_currentReport.TopSellingProducts.Count} Items";
                     LoadReportContext("Top Selling Products");
@@ -580,6 +1313,8 @@ namespace Hardware.winforms
         private async Task RefreshAllDataAsync()
         {
             await LoadInventoryAsync();
+            await LoadPayrollAsync();
+            await LoadPurchaseOrdersAsync();
             await LoadReportsAsync();
         }
     }
@@ -600,6 +1335,7 @@ namespace Hardware.winforms
     public class CartItemDto
     {
         public int ProductId { get; set; }
+        public string ProductName { get; set; } = string.Empty;
         public decimal Quantity { get; set; }
         public decimal UnitPrice { get; set; }
         public decimal SubTotal { get; set; }
@@ -626,5 +1362,43 @@ namespace Hardware.winforms
         public string ProductName { get; set; } = string.Empty;
         public decimal TotalQuantitySold { get; set; }
         public decimal TotalRevenue { get; set; }
+    }
+
+    public class PayrollRecordDto
+    {
+        public int PayrollId { get; set; }
+        public int EmployeeId { get; set; }
+        public string EmployeeName { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
+        public decimal BaseSalary { get; set; }
+        public decimal Bonuses { get; set; }
+        public decimal Deductions { get; set; }
+        public decimal NetPay { get; set; }
+        public string PayPeriod { get; set; } = string.Empty;
+        public string Status { get; set; } = "Pending";
+        public DateTime ProcessedAt { get; set; }
+    }
+
+    public class PurchaseOrderDto
+    {
+        public int PurchaseOrderId { get; set; }
+        public string OrderNumber { get; set; } = string.Empty;
+        public int SupplierId { get; set; }
+        public string SupplierName { get; set; } = string.Empty;
+        public decimal TotalAmount { get; set; }
+        public string Status { get; set; } = "Draft";
+        public DateTime CreatedAt { get; set; }
+        public List<PurchaseOrderItemDto> Items { get; set; } = new List<PurchaseOrderItemDto>();
+    }
+
+    public class PurchaseOrderItemDto
+    {
+        public int PurchaseOrderItemId { get; set; }
+        public int PurchaseOrderId { get; set; }
+        public int ProductId { get; set; }
+        public string ProductName { get; set; } = string.Empty;
+        public decimal Quantity { get; set; }
+        public decimal UnitCost { get; set; }
+        public decimal SubTotal { get; set; }
     }
 }
