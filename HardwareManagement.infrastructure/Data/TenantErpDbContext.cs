@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using Hardware.domain.Entities;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,6 +15,10 @@ namespace Hardware.infrastructure.Data
         public DbSet<Inventory> Inventories => Set<Inventory>();
         public DbSet<Sale> Sales => Set<Sale>();
         public DbSet<SaleItem> SaleItems => Set<SaleItem>();
+        public DbSet<User> Users => Set<User>();
+        public DbSet<PayrollRecord> PayrollRecords => Set<PayrollRecord>();
+        public DbSet<PurchaseOrder> PurchaseOrders => Set<PurchaseOrder>();
+        public DbSet<PurchaseOrderItem> PurchaseOrderItems => Set<PurchaseOrderItem>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -56,6 +59,27 @@ namespace Hardware.infrastructure.Data
             builder.Entity<SaleItem>()
                 .Property(x => x.SubTotal)
                 .HasPrecision(18, 2);
+
+            // Payroll Rules
+            builder.Entity<PayrollRecord>(entity =>
+            {
+                entity.Property(x => x.BaseSalary).HasPrecision(18, 2);
+                entity.Property(x => x.Bonuses).HasPrecision(18, 2);
+                entity.Property(x => x.Deductions).HasPrecision(18, 2);
+                entity.Property(x => x.NetPay).HasPrecision(18, 2);
+            });
+
+            // Purchase Order Rules
+            builder.Entity<PurchaseOrder>()
+                .Property(x => x.TotalAmount)
+                .HasPrecision(18, 2);
+
+            builder.Entity<PurchaseOrderItem>(entity =>
+            {
+                entity.Property(x => x.Quantity).HasPrecision(18, 2);
+                entity.Property(x => x.UnitCost).HasPrecision(18, 2);
+                entity.Property(x => x.SubTotal).HasPrecision(18, 2);
+            });
         }
     }
 }

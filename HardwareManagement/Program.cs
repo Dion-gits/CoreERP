@@ -10,15 +10,17 @@ namespace Hardware.winforms
         {
             ApplicationConfiguration.Initialize();
 
-            // Launch the renamed Login form first
+            // Launch the two-stage Login form first
             using (var loginForm = new Login())
             {
                 if (loginForm.ShowDialog() == DialogResult.OK)
                 {
                     int tenantId = loginForm.AuthenticatedCompanyId;
+                    string role = loginForm.AuthenticatedRole;
+                    string tenantEmail = loginForm.AuthenticatedTenantEmail;
 
                     // Proceed to Main ERP Form after successful login
-                    Application.Run(new MainErpForm());
+                    Application.Run(new MainErpForm(tenantId, role, tenantEmail));
                 }
             }
         }
