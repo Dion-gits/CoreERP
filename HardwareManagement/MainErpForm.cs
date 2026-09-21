@@ -199,6 +199,14 @@ namespace Hardware.winforms
                     lblRoleBadge.Text = $"👤 {_userRole}\n✉ {_userEmail}";
                     this.Text = $"Small Enterprise ERP - Tenant {_currentCompanyId} [{_userRole}]";
                     ApplyRoleBasedNavigation();
+                    if (string.Equals(_userRole, "Cashier", StringComparison.OrdinalIgnoreCase))
+                    {
+                        SwitchView(viewSales, btnNavSales);
+                    }
+                    else
+                    {
+                        SwitchView(viewDashboard, btnNavDashboard);
+                    }
                     this.Show();
                     _ = RefreshAllDataAsync();
                 }
