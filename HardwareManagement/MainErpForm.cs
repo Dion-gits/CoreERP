@@ -454,8 +454,9 @@ namespace Hardware.winforms
             using Pen linePen = new Pen(BorderColor, 2);
             g.DrawLine(linePen, 40, startY, pnlGraphContainer.Width - 40, startY);
 
-            int count = Math.Min(_allProducts.Count > 0 ? _allProducts.Count : 5, 8);
-            if (count == 0) return;
+            if (!_allProducts.Any()) return;
+
+            int count = Math.Min(_allProducts.Count, 8);
 
             decimal maxVal = _allProducts.Max(p => p.QuantityOnHand);
             if (maxVal <= 0) maxVal = 100;
@@ -991,6 +992,8 @@ namespace Hardware.winforms
 
             using Pen linePen = new Pen(BorderColor, 2);
             g.DrawLine(linePen, 40, startY, pnlReportChart.Width - 40, startY);
+
+            if (_currentReport == null || _currentReport.TopSellingProducts == null || !_currentReport.TopSellingProducts.Any()) return;
 
             decimal maxRev = _currentReport.TopSellingProducts.Max(p => p.TotalRevenue);
             if (maxRev <= 0) maxRev = 100;
