@@ -1,8 +1,5 @@
-﻿using System;
+using System;
 using System.Drawing;
-using System.Net.Http;
-using System.Net.Http.Json;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Hardware.winforms
@@ -12,21 +9,29 @@ namespace Hardware.winforms
         public int AuthenticatedCompanyId { get; private set; } = 1;
         public string AuthenticatedTenantEmail { get; private set; } = "tenant1@email";
         public string AuthenticatedRole { get; private set; } = "Owner";
-        public string AuthenticatedUserName { get; private set; } = "Tenant Owner";
+        public string AuthenticatedUserEmail { get; private set; } = "owner1@email";
 
-        private int currentStage = 1; // 1 = Tenant Login, 2 = User Login
+        private int currentStage = 1; // 1 = Tenant Company Login, 2 = Staff User Login
 
-        // Controls
+        // Modern Visual Theme
+        private readonly Color BgDark = Color.FromArgb(18, 18, 18);
+        private readonly Color CardBg = Color.FromArgb(28, 28, 28);
+        private readonly Color TextPrimary = Color.FromArgb(243, 244, 246);
+        private readonly Color TextMuted = Color.FromArgb(156, 163, 175);
+        private readonly Color AccentGreen = Color.FromArgb(16, 185, 129);
+        private readonly Color AccentBlue = Color.FromArgb(59, 130, 246);
+
+        // Header Controls
         private Label lblHeader;
         private Label lblSubHeader;
 
-        // Stage 1 Controls
+        // Stage 1 Controls (Tenant Company Login)
         private Panel pnlStage1;
         private TextBox txtTenantEmail;
         private TextBox txtTenantPassword;
         private Button btnTenantLogin;
 
-        // Stage 2 Controls
+        // Stage 2 Controls (Staff Role Login)
         private Panel pnlStage2;
         private ComboBox cbUserRole;
         private TextBox txtUserEmail;
@@ -41,28 +46,28 @@ namespace Hardware.winforms
 
         private void InitializeComponentCustom()
         {
-            this.Text = "Sign In - Small Enterprise ERP Core";
-            this.Size = new Size(480, 520);
+            this.Text = "Sign In - Small Enterprise ERP Workspace";
+            this.Size = new Size(500, 560);
             this.StartPosition = FormStartPosition.CenterScreen;
-            this.BackColor = Color.FromArgb(18, 18, 18);
+            this.BackColor = BgDark;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
 
             lblHeader = new Label
             {
-                Text = "⚡ CORE ERP",
-                ForeColor = Color.FromArgb(243, 244, 246),
+                Text = "⚡ CORE SMALL ERP",
+                ForeColor = TextPrimary,
                 Font = new Font("Segoe UI", 18, FontStyle.Bold),
-                Location = new Point(40, 30),
+                Location = new Point(45, 30),
                 AutoSize = true
             };
 
             lblSubHeader = new Label
             {
-                Text = "Step 1: Tenant Organization Login",
-                ForeColor = Color.FromArgb(156, 163, 175),
+                Text = "Stage 1: Tenant Company Authentication",
+                ForeColor = TextMuted,
                 Font = new Font("Segoe UI", 10),
-                Location = new Point(40, 70),
+                Location = new Point(45, 70),
                 AutoSize = true
             };
 
@@ -77,15 +82,15 @@ namespace Hardware.winforms
         {
             pnlStage1 = new Panel
             {
-                Location = new Point(40, 110),
-                Size = new Size(385, 340),
-                BackColor = Color.FromArgb(18, 18, 18)
+                Location = new Point(45, 110),
+                Size = new Size(400, 380),
+                BackColor = BgDark
             };
 
             Label lblEmail = new Label
             {
-                Text = "Tenant Email (e.g. tenant1@email)",
-                ForeColor = Color.FromArgb(243, 244, 246),
+                Text = "Tenant Company Email (tenant1@email, tenant2@email, tenant3@email)",
+                ForeColor = TextPrimary,
                 Font = new Font("Segoe UI", 9, FontStyle.Bold),
                 Location = new Point(0, 10),
                 AutoSize = true
@@ -95,19 +100,19 @@ namespace Hardware.winforms
             {
                 Text = "tenant1@email",
                 Location = new Point(0, 35),
-                Size = new Size(380, 32),
+                Size = new Size(395, 34),
                 Font = new Font("Segoe UI", 11),
-                BackColor = Color.FromArgb(28, 28, 28),
-                ForeColor = Color.FromArgb(243, 244, 246),
+                BackColor = CardBg,
+                ForeColor = TextPrimary,
                 BorderStyle = BorderStyle.FixedSingle
             };
 
             Label lblPass = new Label
             {
                 Text = "Tenant Password (Default: 123123)",
-                ForeColor = Color.FromArgb(243, 244, 246),
+                ForeColor = TextPrimary,
                 Font = new Font("Segoe UI", 9, FontStyle.Bold),
-                Location = new Point(0, 85),
+                Location = new Point(0, 90),
                 AutoSize = true
             };
 
@@ -115,20 +120,20 @@ namespace Hardware.winforms
             {
                 Text = "123123",
                 UseSystemPasswordChar = true,
-                Location = new Point(0, 110),
-                Size = new Size(380, 32),
+                Location = new Point(0, 115),
+                Size = new Size(395, 34),
                 Font = new Font("Segoe UI", 11),
-                BackColor = Color.FromArgb(28, 28, 28),
-                ForeColor = Color.FromArgb(243, 244, 246),
+                BackColor = CardBg,
+                ForeColor = TextPrimary,
                 BorderStyle = BorderStyle.FixedSingle
             };
 
             btnTenantLogin = new Button
             {
-                Text = "Continue to User Selection ➔",
-                Location = new Point(0, 175),
-                Size = new Size(380, 45),
-                BackColor = Color.FromArgb(16, 185, 129),
+                Text = "Authenticate Tenant ➔",
+                Location = new Point(0, 180),
+                Size = new Size(395, 48),
+                BackColor = AccentGreen,
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI", 11, FontStyle.Bold),
                 FlatStyle = FlatStyle.Flat,
@@ -140,9 +145,9 @@ namespace Hardware.winforms
             Label lblNotice = new Label
             {
                 Text = "Valid Tenant Accounts:\n• tenant1@email  • tenant2@email  • tenant3@email\nPassword for all: 123123",
-                ForeColor = Color.FromArgb(156, 163, 175),
+                ForeColor = TextMuted,
                 Font = new Font("Segoe UI", 8, FontStyle.Italic),
-                Location = new Point(0, 240),
+                Location = new Point(0, 250),
                 AutoSize = true
             };
 
@@ -153,16 +158,16 @@ namespace Hardware.winforms
         {
             pnlStage2 = new Panel
             {
-                Location = new Point(40, 110),
-                Size = new Size(385, 360),
-                BackColor = Color.FromArgb(18, 18, 18),
+                Location = new Point(45, 110),
+                Size = new Size(400, 380),
+                BackColor = BgDark,
                 Visible = false
             };
 
             Label lblRole = new Label
             {
-                Text = "Select Position / Role Use Case",
-                ForeColor = Color.FromArgb(243, 244, 246),
+                Text = "Select Position / Role (6 System Roles)",
+                ForeColor = TextPrimary,
                 Font = new Font("Segoe UI", 9, FontStyle.Bold),
                 Location = new Point(0, 5),
                 AutoSize = true
@@ -172,18 +177,18 @@ namespace Hardware.winforms
             {
                 DropDownStyle = ComboBoxStyle.DropDownList,
                 Location = new Point(0, 28),
-                Size = new Size(380, 32),
-                Font = new Font("Segoe UI", 11),
-                BackColor = Color.FromArgb(28, 28, 28),
-                ForeColor = Color.FromArgb(243, 244, 246)
+                Size = new Size(395, 32),
+                Font = new Font("Segoe UI", 10),
+                BackColor = CardBg,
+                ForeColor = TextPrimary
             };
             cbUserRole.Items.AddRange(new object[] { "Owner", "Super Admin", "HR Manager", "Branch Manager", "Cashier", "Inventory Staff" });
             cbUserRole.SelectedIndex = 0;
 
             Label lblUserEmail = new Label
             {
-                Text = "User Account Email",
-                ForeColor = Color.FromArgb(243, 244, 246),
+                Text = "Staff / User Email (e.g. owner1@email)",
+                ForeColor = TextPrimary,
                 Font = new Font("Segoe UI", 9, FontStyle.Bold),
                 Location = new Point(0, 75),
                 AutoSize = true
@@ -191,27 +196,23 @@ namespace Hardware.winforms
 
             txtUserEmail = new TextBox
             {
-                Text = "owner@tenant1.com",
+                Text = "owner1@email",
                 Location = new Point(0, 98),
-                Size = new Size(380, 32),
+                Size = new Size(395, 34),
                 Font = new Font("Segoe UI", 11),
-                BackColor = Color.FromArgb(28, 28, 28),
-                ForeColor = Color.FromArgb(243, 244, 246),
+                BackColor = CardBg,
+                ForeColor = TextPrimary,
                 BorderStyle = BorderStyle.FixedSingle
             };
 
-            cbUserRole.SelectedIndexChanged += (s, e) =>
-            {
-                string roleName = cbUserRole.SelectedItem?.ToString() ?? "Owner";
-                txtUserEmail.Text = $"{roleName.Replace(" ", "").ToLower()}@{AuthenticatedTenantEmail.Split('@')[0]}.com";
-            };
+            cbUserRole.SelectedIndexChanged += (s, e) => UpdateRoleEmailFormat();
 
             Label lblUserPass = new Label
             {
                 Text = "User Password (Default: 123123)",
-                ForeColor = Color.FromArgb(243, 244, 246),
+                ForeColor = TextPrimary,
                 Font = new Font("Segoe UI", 9, FontStyle.Bold),
-                Location = new Point(0, 145),
+                Location = new Point(0, 148),
                 AutoSize = true
             };
 
@@ -219,20 +220,20 @@ namespace Hardware.winforms
             {
                 Text = "123123",
                 UseSystemPasswordChar = true,
-                Location = new Point(0, 168),
-                Size = new Size(380, 32),
+                Location = new Point(0, 171),
+                Size = new Size(395, 34),
                 Font = new Font("Segoe UI", 11),
-                BackColor = Color.FromArgb(28, 28, 28),
-                ForeColor = Color.FromArgb(243, 244, 246),
+                BackColor = CardBg,
+                ForeColor = TextPrimary,
                 BorderStyle = BorderStyle.FixedSingle
             };
 
             btnUserLogin = new Button
             {
                 Text = "Sign In to ERP Workspace 🚀",
-                Location = new Point(0, 220),
-                Size = new Size(380, 45),
-                BackColor = Color.FromArgb(59, 130, 246),
+                Location = new Point(0, 225),
+                Size = new Size(395, 48),
+                BackColor = AccentBlue,
                 ForeColor = Color.White,
                 Font = new Font("Segoe UI", 11, FontStyle.Bold),
                 FlatStyle = FlatStyle.Flat,
@@ -243,11 +244,11 @@ namespace Hardware.winforms
 
             btnBackToStage1 = new Button
             {
-                Text = "⬅ Change Tenant Account",
-                Location = new Point(0, 275),
-                Size = new Size(380, 35),
+                Text = "⬅ Change Tenant Company",
+                Location = new Point(0, 285),
+                Size = new Size(395, 35),
                 BackColor = Color.FromArgb(40, 40, 40),
-                ForeColor = Color.FromArgb(156, 163, 175),
+                ForeColor = TextMuted,
                 Font = new Font("Segoe UI", 9),
                 FlatStyle = FlatStyle.Flat,
                 Cursor = Cursors.Hand
@@ -258,20 +259,38 @@ namespace Hardware.winforms
             pnlStage2.Controls.AddRange(new Control[] { lblRole, cbUserRole, lblUserEmail, txtUserEmail, lblUserPass, txtUserPassword, btnUserLogin, btnBackToStage1 });
         }
 
+        private void UpdateRoleEmailFormat()
+        {
+            string roleName = cbUserRole.SelectedItem?.ToString() ?? "Owner";
+            string rolePrefix = roleName switch
+            {
+                "Super Admin" => "superadmin",
+                "Owner" => "owner",
+                "HR Manager" => "hr",
+                "Branch Manager" => "manager",
+                "Cashier" => "cashier",
+                "Inventory Staff" => "inventory",
+                _ => "user"
+            };
+
+            txtUserEmail.Text = $"{rolePrefix}{AuthenticatedCompanyId}@email";
+        }
+
         private void ShowStage(int stage)
         {
             currentStage = stage;
             if (stage == 1)
             {
-                lblSubHeader.Text = "Step 1 of 2: Tenant Organization Login";
+                lblSubHeader.Text = "Stage 1 of 2: Tenant Company Authentication";
                 pnlStage1.Visible = true;
                 pnlStage2.Visible = false;
             }
             else
             {
-                lblSubHeader.Text = $"Step 2 of 2: User Position Login ({AuthenticatedTenantEmail})";
+                lblSubHeader.Text = $"Stage 2 of 2: Staff Login — Tenant {AuthenticatedCompanyId} ({AuthenticatedTenantEmail})";
                 pnlStage1.Visible = false;
                 pnlStage2.Visible = true;
+                UpdateRoleEmailFormat();
             }
         }
 
@@ -282,7 +301,7 @@ namespace Hardware.winforms
 
             if (pass != "123123")
             {
-                MessageBox.Show("Invalid Tenant Password. Please enter '123123'.", "Authentication Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Invalid Tenant Password. Please use '123123'.", "Authentication Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
@@ -302,7 +321,6 @@ namespace Hardware.winforms
 
             AuthenticatedCompanyId = tenantId;
             AuthenticatedTenantEmail = email;
-            txtUserEmail.Text = $"owner@tenant{tenantId}.com";
             ShowStage(2);
         }
 
@@ -316,7 +334,7 @@ namespace Hardware.winforms
             }
 
             AuthenticatedRole = cbUserRole.SelectedItem?.ToString() ?? "Owner";
-            AuthenticatedUserName = $"{AuthenticatedRole} User";
+            AuthenticatedUserEmail = txtUserEmail.Text.Trim();
 
             this.DialogResult = DialogResult.OK;
             this.Close();
